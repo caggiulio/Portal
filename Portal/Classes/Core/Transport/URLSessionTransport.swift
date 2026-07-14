@@ -23,10 +23,8 @@ public struct URLSessionTransport: HTTPTransport {
       urlRequest.timeoutInterval = timeout
     }
     
-    request.header?.forEach { key, value in
-      if let value = value as? String {
-        urlRequest.setValue(value, forHTTPHeaderField: key)
-      }
+    request.header?.forEach { header in
+      urlRequest.setValue(header.value.rawValue, forHTTPHeaderField: header.key.rawValue)
     }
     
     if let body = request.body {

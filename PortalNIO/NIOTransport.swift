@@ -15,10 +15,8 @@ public struct NIOTransport: HTTPTransport {
       httpRequest.tlsConfiguration?.shutdownTimeout = .seconds(Int64(timeout))
     }
     
-    request.header?.forEach { key, value in
-      if let value = value as? String {
-        httpRequest.headers.add(name: key, value: value)
-      }
+    request.header?.forEach { header in
+      httpRequest.headers.add(name: header.key.rawValue, value: header.value.rawValue)
     }
     
     if let body = request.body {

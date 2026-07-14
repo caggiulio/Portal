@@ -123,7 +123,7 @@ struct PortalInterceptorTests {
             var adapted = false
             func adapt(_ request: PortalRequest) -> PortalRequest {
                 adapted = true
-                var r = request; r.header = ["X-Token": "abc"]; return r
+                var r = request; r.header = [Header(key: "X-Token", value: "abc")]; return r
             }
         }
 
@@ -132,7 +132,7 @@ struct PortalInterceptorTests {
             request: PortalRequest(method: .get, path: Path(url: "/me", query: nil))
         )
         #expect(interceptor.adapted)
-        #expect(transport.lastRequest?.header?["X-Token"] as? String == "abc")
+        #expect(transport.lastRequest?.header?.first(where: { $0.key.rawValue == "X-Token" })?.value.rawValue == "abc")
     }
 
     @Test func doNotRetry() async throws {
@@ -273,7 +273,7 @@ struct PortalMultipartTests {
             medias: [media],
             boundary: "myboundary"
         )
-        let contentType = transport.lastRequest?.header?["Content-Type"] as? String
+        let contentType = transport.lastRequest?.header?.first(where: { $0.key == .contentType })?.value.rawValue
         #expect(contentType?.contains("multipart/form-data") == true)
         #expect(contentType?.contains("myboundary") == true)
     }
@@ -323,7 +323,9 @@ struct PortalMultipartTests {
         final class TokenInterceptor: PortalInterceptorProtocol {
             func adapt(_ request: PortalRequest) -> PortalRequest {
                 var r = request
-                r.header = (r.header ?? [:]).merging(["Authorization": "Bearer tok"]) { _, new in new }
+                var headers = r.header ?? []
+                headers.append(Header(key: .authorization, value: .bearer("tok")))
+                r.header = headers
                 return r
             }
         }
@@ -428,7 +430,7 @@ struct PortalEmptyMultipartResponseTests {
             medias: [media],
             boundary: "testboundary"
         )
-        let contentType = transport.lastRequest?.header?["Content-Type"] as? String
+        let contentType = transport.lastRequest?.header?.first(where: { $0.key == .contentType })?.value.rawValue
         #expect(contentType?.contains("multipart/form-data") == true)
         #expect(contentType?.contains("testboundary") == true)
     }

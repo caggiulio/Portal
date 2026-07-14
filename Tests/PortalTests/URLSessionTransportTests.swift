@@ -98,7 +98,7 @@ struct URLSessionTransportTests {
         let request = PortalRequest(
             method: .get,
             path: Path(url: "https://api.example.com/test", query: nil),
-            header: ["X-Custom": "hello", "X-Ignored": 42],
+            header: [Header(key: "X-Custom", value: "hello")],
             scheme: nil
         )
         _ = try await transport.execute(request)

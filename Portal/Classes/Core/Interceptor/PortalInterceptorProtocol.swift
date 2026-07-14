@@ -2,7 +2,7 @@
 //  PortalInterceptorProtocol.swift
 //  Portal
 //
-//  Copyright © 2022 Nunzio Giulio Caggegi All rights reserved.
+//  Copyright © 2026 Nunzio Giulio Caggegi All rights reserved.
 //
 
 import Foundation

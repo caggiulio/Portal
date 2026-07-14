@@ -2,7 +2,7 @@
 //  PortalRequest.swift
 //  Portal
 //
-//  Copyright © 2022 Nunzio Giulio Caggegi All rights reserved.
+//  Copyright © 2026 Nunzio Giulio Caggegi All rights reserved.
 //
 
 import Foundation
@@ -39,8 +39,8 @@ public struct PortalRequest {
   public var method: HTTPMethod
   /// Destination URL and optional query items.
   public var path: Path
-  /// HTTP headers. String values are forwarded as-is; non-String values are ignored.
-  public var header: [String: Any]?
+  /// HTTP headers to include with the request.
+  public var header: [Header]?
   /// Optional request body.
   public var body: Body?
   /// Overrides the URL scheme. Replaces whatever scheme is in `baseURL`.
@@ -56,13 +56,13 @@ public struct PortalRequest {
   ///   - method: The HTTP verb to use for the request (for example, `.get`, `.post`, `.put`, `.patch`, or `.delete`).
   ///   - path: A tuple containing the destination URL string and optional query items to append to the URL.
   ///           Provide the raw URL in `url` and any query parameters as `[URLQueryItem]` in `query`.
-  ///   - header: Optional HTTP headers to include with the request. Only values that are `String` are forwarded to the request; non-`String` values are ignored. Defaults to `nil`.
+  ///   - header: Optional HTTP headers to include with the request. Defaults to `nil`.
   ///   - body: Optional request body as a tuple containing an `Encodable` payload and its wire `Encoding` strategy
   ///           (e.g., `.json` or `.urlEncoded`). Defaults to `nil`.
   ///   - scheme: Optional URL scheme override that replaces the scheme in the base URL (e.g., `.http` or `.https`).
   ///             Defaults to `.http`.
   ///   - timeout: Optional timeout request in seconds. Default to 30 seconds.
-  public init(method: HTTPMethod, path: Path, header: [String: Any]? = nil, body: Body? = nil, scheme: Scheme? = .http, timeout: TimeInterval? = 30) {
+  public init(method: HTTPMethod, path: Path, header: [Header]? = nil, body: Body? = nil, scheme: Scheme? = .http, timeout: TimeInterval? = 30) {
     self.method = method
     self.path = path
     self.header = header

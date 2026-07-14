@@ -2,7 +2,7 @@
 //  Portal.swift
 //  Portal
 //
-//  Copyright © 2022 Nunzio Giulio Caggegi All rights reserved.
+//  Copyright © 2026 Nunzio Giulio Caggegi All rights reserved.
 //
 
 import Foundation
@@ -123,8 +123,8 @@ private extension Portal {
   func buildMultipartRequest(from request: PortalRequest, medias: [PortalMedia], boundary: String = UUID().uuidString) -> PortalRequest {
     let body = makeMultipartBody(request: request, medias: medias, boundary: boundary)
     // Wrap raw multipart data as a custom body via a RawDataEncodable shim
-    var headers = request.header ?? [:]
-    headers["Content-Type"] = "multipart/form-data; boundary=\(boundary)"
+    var headers = request.header ?? []
+    headers.append(Header(key: .contentType, value: .multipartFormData(boundary: boundary)))
     return PortalRequest(
       method: request.method,
       path: request.path,
