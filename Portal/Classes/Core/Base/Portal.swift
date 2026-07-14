@@ -7,14 +7,11 @@
 
 import Foundation
 
-#if canImport(Combine)
-import Combine
-#endif
-
 // MARK: - Portal
 
 /// Public class used to build an object that will deal with HTTP calls. It's builded with the `baseURL` and the `PortalInterceptorProtocol` passed on init.
 public class Portal: NSObject, PortalProtocol {
+  
   // MARK: - Public methods
 
   /// Prints network calls in the console.
