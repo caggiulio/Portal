@@ -1,0 +1,41 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+*.moved-to-trash/
+DerivedData/
+.build/
+*.o
+*.d
+
+# Swift Package Manager
+.build/
+.swiftpm/
+*.resolved
+
+# CocoaPods (if used alongside SPM)
+Pods/
+Podfile.lock
+
+# Carthage
+Carthage/Build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Secrets / Environment
+.env
+.env.*
+*.pem
+*.key
+
+# Logs
+*.log
