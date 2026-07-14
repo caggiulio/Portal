@@ -28,6 +28,7 @@ public class Portal: NSObject, PortalProtocol {
 
   // MARK: - Business logic properties
 
+  /// The base URL.
   private let baseURL: String
 
   /// The interceptor is used to adapt `URL` request and retry mechanism
@@ -58,9 +59,9 @@ public class Portal: NSObject, PortalProtocol {
   @available(macOS 12.0, iOS 15.0, *)
   public func send<SuccessResponse>(request: PortalRequest) async throws -> SuccessResponse where SuccessResponse: Decodable {
     var adaptedRequest = interceptor?.adapt(request) ?? request
-    adaptedRequest.path = (url: baseURL + adaptedRequest.path.url, query: adaptedRequest.path.query)
+    adaptedRequest.path = Path(url: baseURL + adaptedRequest.path.url, query: adaptedRequest.path.query)
     if let scheme = adaptedRequest.scheme {
-      adaptedRequest.path = (url: applyScheme(scheme, to: adaptedRequest.path.url), query: adaptedRequest.path.query)
+      adaptedRequest.path = Path(url: applyScheme(scheme, to: adaptedRequest.path.url), query: adaptedRequest.path.query)
     }
     logger.logRequest(adaptedRequest)
     let (data, statusCode) = try await transport.execute(adaptedRequest)
@@ -79,9 +80,9 @@ public class Portal: NSObject, PortalProtocol {
   @available(macOS 12.0, iOS 15.0, *)
   public func send<SuccessResponse>(request: PortalRequest, medias: [PortalMedia], boundary: String) async throws -> SuccessResponse where SuccessResponse: Decodable {
     var adaptedRequest = interceptor?.adapt(request) ?? request
-    adaptedRequest.path = (url: baseURL + adaptedRequest.path.url, query: adaptedRequest.path.query)
+    adaptedRequest.path = Path(url: baseURL + adaptedRequest.path.url, query: adaptedRequest.path.query)
     if let scheme = adaptedRequest.scheme {
-      adaptedRequest.path = (url: applyScheme(scheme, to: adaptedRequest.path.url), query: adaptedRequest.path.query)
+      adaptedRequest.path = Path(url: applyScheme(scheme, to: adaptedRequest.path.url), query: adaptedRequest.path.query)
     }
     let multipartRequest = buildMultipartRequest(from: adaptedRequest, medias: medias, boundary: boundary)
     let (data, statusCode) = try await transport.execute(multipartRequest)
@@ -112,7 +113,7 @@ private extension Portal {
       method: request.method,
       path: request.path,
       header: headers,
-      body: (data: RawDataBody(data: body), encoding: .json)
+      body: Body(data: RawDataBody(data: body), encoding: .json)
     )
   }
 
