@@ -118,29 +118,148 @@ let user: User = try await portal.send(request: request)
 
 ## Interceptors
 
-Implement `PortalInterceptorProtocol` to adapt every outgoing request or retry on failure:
+Interceptors are the extension point for cross-cutting concerns: authentication, token refresh, logging, header injection, and retry policies. Portal's interceptor system is split into two composable protocols that are both satisfied by `PortalInterceptorProtocol`.
+
+### Protocol overview
+
+```
+PortalInterceptorProtocol
+├── RequestAdapter    →  adapt(_ request:) -> PortalRequest
+└── RetryAdapter      →  retry(_ request:, dueTo error:) async throws -> RetryResult
+```
+
+Both methods have **default no-op implementations**, so you only override what you need.
+
+---
+
+### `RequestAdapter` — mutate requests before they are sent
+
+`adapt(_:)` is called for every outgoing request, before the transport layer touches it. Return a modified copy to inject headers, override the scheme, sign the request, or anything else.
 
 ```swift
 class AuthInterceptor: PortalInterceptorProtocol {
     func adapt(_ request: PortalRequest) -> PortalRequest {
         var r = request
-        r.header?["Authorization"] = "Bearer \(TokenStore.current)"
+        var headers = r.header ?? [:]
+        headers["Authorization"] = "Bearer \(TokenStore.current)"
+        r.header = headers
+        return r
+    }
+}
+```
+
+Common `adapt` use-cases:
+
+| Use-case | What to mutate |
+|----------|----------------|
+| Bearer token | `header["Authorization"]` |
+| API key | `header["X-Api-Key"]` |
+| Device / platform info | `header["X-Platform"]` |
+| Force HTTPS | `request.scheme = .https` |
+| Locale | `header["Accept-Language"]` |
+
+---
+
+### `RetryAdapter` — decide whether to retry a failed request
+
+`retry(_:dueTo:)` is called whenever a request ends with a non-2xx status or a network error. Return `.retry` to re-send the original request, or `.doNotRetry` to propagate the error.
+
+```swift
+enum RetryResult {
+    case retry
+    case doNotRetry
+}
+```
+
+> **Note:** Portal does not apply a retry limit automatically. If you always return `.retry`, the request will loop indefinitely. Guard against that in your implementation (see examples below).
+
+---
+
+### Examples
+
+#### Token refresh on 401
+
+```swift
+class TokenRefreshInterceptor: PortalInterceptorProtocol {
+    private var retryCount = 0
+    private let maxRetries = 1
+
+    func adapt(_ request: PortalRequest) -> PortalRequest {
+        var r = request
+        var headers = r.header ?? [:]
+        headers["Authorization"] = "Bearer \(TokenStore.current)"
+        r.header = headers
         return r
     }
 
     func retry(_ request: PortalRequest, dueTo error: Error) async throws -> RetryResult {
-        guard (error as? PortalError)?.statusCode == 401 else { return .doNotRetry }
-        try await TokenStore.refresh()
+        guard
+            case PortalError.underlying(let statusCode, _) = error,
+            statusCode == 401,
+            retryCount < maxRetries
+        else { return .doNotRetry }
+
+        retryCount += 1
+        try await TokenStore.refresh()   // await new token
+        return .retry                    // Portal will call adapt() again on the retried request
+    }
+}
+```
+
+#### Exponential back-off on 5xx
+
+```swift
+class RetryInterceptor: PortalInterceptorProtocol {
+    private var attempt = 0
+    private let maxAttempts = 3
+
+    func retry(_ request: PortalRequest, dueTo error: Error) async throws -> RetryResult {
+        guard
+            case PortalError.underlying(let statusCode, _) = error,
+            (500...599).contains(statusCode),
+            attempt < maxAttempts
+        else { return .doNotRetry }
+
+        let delay = pow(2.0, Double(attempt))   // 1s, 2s, 4s
+        attempt += 1
+        try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
         return .retry
     }
 }
+```
 
+#### Adapter-only interceptor (no retry)
+
+When you only need to mutate requests, omit `retry` — the default implementation returns `.doNotRetry`.
+
+```swift
+class CommonHeadersInterceptor: PortalInterceptorProtocol {
+    let appVersion: String
+
+    func adapt(_ request: PortalRequest) -> PortalRequest {
+        var r = request
+        var headers = r.header ?? [:]
+        headers["X-App-Version"] = appVersion
+        headers["X-Platform"] = "iOS"
+        r.header = headers
+        return r
+    }
+}
+```
+
+---
+
+### Wiring an interceptor to Portal
+
+```swift
 let portal = Portal(
     baseURL: "https://api.example.com",
     transport: URLSessionTransport(),
-    interceptor: AuthInterceptor()
+    interceptor: TokenRefreshInterceptor()
 )
 ```
+
+One `Portal` instance accepts one interceptor. Chain multiple concerns by composing them inside a single interceptor class.
 
 ---
 
