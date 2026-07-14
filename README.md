@@ -7,10 +7,11 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Swift-5.9+-F05138?style=flat&logo=swift&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Swift-5.10+-F05138?style=flat&logo=swift&logoColor=white"/>
   <img src="https://img.shields.io/badge/Platforms-iOS%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue?style=flat"/>
   <img src="https://img.shields.io/badge/SPM-compatible-brightgreen?style=flat"/>
   <img src="https://img.shields.io/badge/License-MIT-lightgrey?style=flat"/>
+  <img src="https://img.shields.io/badge/Test%20Coverage-~98%25-brightgreen?style=flat&logo=checkmarx"/>
 </p>
 
 ---
@@ -320,12 +321,22 @@ A typical Android integration uses the Swift Android SDK toolchain to compile yo
 
 ---
 
+## Testing
+
+Portal ships with a full test suite written in [Swift Testing](https://developer.apple.com/xcode/swift-testing/), achieving **~98% line coverage**.
+
+```
+swift test --enable-code-coverage
+```
+
+---
+
 ## Requirements
 
 | Target | Swift | Platform |
 |--------|-------|----------|
-| `Portal` | 5.9+ | iOS 15+, macOS 12+ |
-| `PortalNIO` | 5.9+ | Linux, Android, macOS 12+ |
+| `Portal` | 5.10+ | iOS 15+, macOS 12+ |
+| `PortalNIO` | 5.10+ | Linux, Android, macOS 12+ |
 
 ---
 

@@ -1,8 +1,12 @@
-// swift-tools-version:5.9
+// swift-tools-version:5.10
 import PackageDescription
 
 let package = Package(
   name: "Portal",
+  platforms: [
+    .macOS(.v12),
+    .iOS(.v15),
+  ],
   products: [
     .library(name: "Portal", targets: ["Portal"]),
     .library(name: "PortalNIO", targets: ["PortalNIO"]),

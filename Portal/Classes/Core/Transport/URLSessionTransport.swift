@@ -5,7 +5,11 @@ import Foundation
 /// Handles JSON and URL-encoded body encoding, and maps `HTTPURLResponse` to a status code.
 @available(macOS 12.0, iOS 15.0, *)
 public struct URLSessionTransport: HTTPTransport {
-    public init() {}
+    private let session: URLSession
+
+    public init(session: URLSession = .shared) {
+        self.session = session
+    }
 
     public func execute(_ request: PortalRequest) async throws -> (Data, Int) {
         guard let url = buildURL(from: request) else {
@@ -37,7 +41,7 @@ public struct URLSessionTransport: HTTPTransport {
             }
         }
 
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
+        let (data, response) = try await session.data(for: urlRequest)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PortalError.invalidHTTPResponse
         }
