@@ -435,3 +435,141 @@ struct PortalEmptyMultipartResponseTests {
         #expect(contentType?.contains("testboundary") == true)
     }
 }
+
+// MARK: - Cache tests
+
+@Suite("InMemoryCache")
+struct InMemoryCacheTests {
+    @Test func storeAndRetrieve() async {
+        let cache = InMemoryCache()
+        let entry = CachedResponse(data: Data([0x01]), statusCode: 200, expiresAt: Date().addingTimeInterval(60), etag: nil)
+        await cache.set("key", response: entry)
+        let hit = await cache.get("key")
+        #expect(hit?.statusCode == 200)
+        #expect(hit?.data == Data([0x01]))
+    }
+
+    @Test func missReturnsNil() async {
+        let cache = InMemoryCache()
+        let hit = await cache.get("missing")
+        #expect(hit == nil)
+    }
+
+    @Test func removesEntry() async {
+        let cache = InMemoryCache()
+        let entry = CachedResponse(data: Data([0x01]), statusCode: 200, expiresAt: nil, etag: nil)
+        await cache.set("key", response: entry)
+        await cache.remove("key")
+        #expect(await cache.get("key") == nil)
+    }
+
+    @Test func removeAll() async {
+        let cache = InMemoryCache()
+        let entry = CachedResponse(data: Data([0x01]), statusCode: 200, expiresAt: nil, etag: nil)
+        await cache.set("a", response: entry)
+        await cache.set("b", response: entry)
+        await cache.removeAll()
+        #expect(await cache.get("a") == nil)
+        #expect(await cache.get("b") == nil)
+    }
+
+    @Test func expiredEntryIsDetected() {
+        let expired = CachedResponse(data: Data(), statusCode: 200, expiresAt: Date().addingTimeInterval(-1), etag: nil)
+        let fresh = CachedResponse(data: Data(), statusCode: 200, expiresAt: Date().addingTimeInterval(60), etag: nil)
+        let noExpiry = CachedResponse(data: Data(), statusCode: 200, expiresAt: nil, etag: nil)
+        #expect(expired.isExpired == true)
+        #expect(fresh.isExpired == false)
+        #expect(noExpiry.isExpired == false)
+    }
+}
+
+@Suite("CacheHandler")
+struct CacheHandlerTests {
+    @Test func cacheKeyIncludesMethodAndURL() {
+        let handler = CacheHandler(cache: InMemoryCache())
+        let request = PortalRequest(method: .get, path: Path(url: "https://api.example.com/items", query: nil))
+        let key = handler.cacheKey(for: request)
+        #expect(key.contains("GET"))
+        #expect(key.contains("https://api.example.com/items"))
+    }
+
+    @Test func cacheKeyIncludesSortedQuery() {
+        let handler = CacheHandler(cache: InMemoryCache())
+        let q1 = PortalRequest(method: .get, path: Path(url: "/items", query: [URLQueryItem(name: "b", value: "2"), URLQueryItem(name: "a", value: "1")]))
+        let q2 = PortalRequest(method: .get, path: Path(url: "/items", query: [URLQueryItem(name: "a", value: "1"), URLQueryItem(name: "b", value: "2")]))
+        #expect(handler.cacheKey(for: q1) == handler.cacheKey(for: q2))
+    }
+
+    @Test func reloadIgnoringReturnsNilFromCache() async {
+        let cache = InMemoryCache()
+        let handler = CacheHandler(cache: cache)
+        let entry = CachedResponse(data: Data([0x01]), statusCode: 200, expiresAt: Date().addingTimeInterval(60), etag: nil)
+        let request = PortalRequest(method: .get, path: Path(url: "/items", query: nil), cachePolicy: .reloadIgnoring)
+        await cache.set(handler.cacheKey(for: request), response: entry)
+        let hit = await handler.cachedEntry(for: request)
+        #expect(hit == nil)
+    }
+
+    @Test func useCacheReturnsFreshEntry() async {
+        let cache = InMemoryCache()
+        let handler = CacheHandler(cache: cache)
+        let request = PortalRequest(method: .get, path: Path(url: "/items", query: nil), cachePolicy: .useCache)
+        let entry = CachedResponse(data: Data([0x42]), statusCode: 200, expiresAt: Date().addingTimeInterval(60), etag: nil)
+        await cache.set(handler.cacheKey(for: request), response: entry)
+        let hit = await handler.cachedEntry(for: request)
+        #expect(hit?.data == Data([0x42]))
+    }
+
+    @Test func returnCacheElseLoadReturnsStaleEntry() async {
+        let cache = InMemoryCache()
+        let handler = CacheHandler(cache: cache)
+        let request = PortalRequest(method: .get, path: Path(url: "/items", query: nil), cachePolicy: .returnCacheElseLoad)
+        let stale = CachedResponse(data: Data([0x99]), statusCode: 200, expiresAt: Date().addingTimeInterval(-1), etag: nil)
+        await cache.set(handler.cacheKey(for: request), response: stale)
+        let hit = await handler.cachedEntry(for: request)
+        #expect(hit?.data == Data([0x99]))
+    }
+
+    @Test func storeSkipsNon2xx() async {
+        let cache = InMemoryCache()
+        let handler = CacheHandler(cache: cache)
+        let request = PortalRequest(method: .get, path: Path(url: "/fail", query: nil))
+        await handler.store(data: Data([0x01]), statusCode: 404, headers: [:], for: request)
+        #expect(await cache.get(handler.cacheKey(for: request)) == nil)
+    }
+
+    @Test func storeWritesEntry() async {
+        let cache = InMemoryCache()
+        let handler = CacheHandler(cache: cache)
+        let request = PortalRequest(method: .get, path: Path(url: "/items", query: nil))
+        await handler.store(data: Data([0x01]), statusCode: 200, headers: [:], for: request)
+        #expect(await cache.get(handler.cacheKey(for: request)) != nil)
+    }
+
+    @Test func noCacheHeaderSkipsStore() async {
+        let cache = InMemoryCache()
+        let handler = CacheHandler(cache: cache)
+        let request = PortalRequest(method: .get, path: Path(url: "/items", query: nil))
+        await handler.store(data: Data([0x01]), statusCode: 200, headers: ["Cache-Control": "no-store"], for: request)
+        #expect(await cache.get(handler.cacheKey(for: request)) == nil)
+    }
+
+    @Test func maxAgeHeaderSetsTTL() async {
+        let cache = InMemoryCache()
+        let handler = CacheHandler(cache: cache)
+        let request = PortalRequest(method: .get, path: Path(url: "/items", query: nil))
+        await handler.store(data: Data([0x01]), statusCode: 200, headers: ["Cache-Control": "max-age=300"], for: request)
+        let entry = await cache.get(handler.cacheKey(for: request))
+        #expect(entry?.expiresAt != nil)
+        #expect(entry?.isExpired == false)
+    }
+
+    @Test func etagStoredFromResponseHeaders() async {
+        let cache = InMemoryCache()
+        let handler = CacheHandler(cache: cache)
+        let request = PortalRequest(method: .get, path: Path(url: "/items", query: nil))
+        await handler.store(data: Data([0x01]), statusCode: 200, headers: ["ETag": "\"abc123\""], for: request)
+        let entry = await cache.get(handler.cacheKey(for: request))
+        #expect(entry?.etag == "\"abc123\"")
+    }
+}

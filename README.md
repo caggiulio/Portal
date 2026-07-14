@@ -27,6 +27,7 @@ Portal is a lightweight, protocol-driven HTTP networking library written entirel
 - **Cross-platform** — iOS 15+, macOS 12+, Linux, Android (via Swift on Android)
 - **Async/Await** — native Swift concurrency throughout
 - **Dual transport layer** — `URLSessionTransport` for Apple platforms, `NIOTransport` for Linux/Android
+- **Response caching** — per-request `CachePolicy`, ETag / `Cache-Control` support (currently in-memory only)
 - **Interceptor pattern** — adapt requests and implement retry logic in one place
 - **Multipart uploads** — built-in support for file and media uploads
 - **Trace logger** — configurable request/response console logging
@@ -280,6 +281,54 @@ let response: UploadResponse = try await portal.send(
     medias: [image],
     boundary: boundary
 )
+```
+
+---
+
+## Caching
+
+Portal supports response caching via a `PortalCache` protocol. Pass a cache instance when constructing the transport — both `URLSessionTransport` and `NIOTransport` accept one.
+
+> **Note:** At the moment, only `InMemoryCache` is provided. Entries live for the lifetime of the process and are not persisted to disk.
+
+```swift
+// Apple platforms
+let portal = Portal(
+    baseURL: "https://api.example.com",
+    transport: URLSessionTransport(cache: InMemoryCache())
+)
+
+// Linux / Android
+let portal = Portal(
+    baseURL: "https://api.example.com",
+    transport: NIOTransport(cache: InMemoryCache())
+)
+```
+
+Control caching behaviour per request via `cachePolicy`:
+
+```swift
+// default: return cached response if fresh, otherwise fetch
+PortalRequest(method: .get, path: Path(url: "/items", query: nil))
+
+// always fetch, skip cache entirely
+PortalRequest(method: .get, path: Path(url: "/items", query: nil), cachePolicy: .reloadIgnoring)
+
+// return cached even if stale, fall back to network only if absent
+PortalRequest(method: .get, path: Path(url: "/items", query: nil), cachePolicy: .returnCacheElseLoad)
+```
+
+Cache TTL is derived from the `Cache-Control: max-age=N` response header (default 60 s when absent). Responses with `no-store` or `no-cache` are never cached. When a cached entry carries an `ETag`, Portal sends `If-None-Match` automatically and reuses the cached body on a `304 Not Modified`.
+
+Implement `PortalCache` to provide a custom backend (disk, keychain, shared memory, etc.):
+
+```swift
+public protocol PortalCache: Sendable {
+    func get(_ key: String) async -> CachedResponse?
+    func set(_ key: String, response: CachedResponse) async
+    func remove(_ key: String) async
+    func removeAll() async
+}
 ```
 
 ---

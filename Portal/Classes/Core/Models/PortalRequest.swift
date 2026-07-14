@@ -47,6 +47,9 @@ public struct PortalRequest {
   public var scheme: Scheme?
   /// The request timeout in seconds.
   public var timeout: TimeInterval?
+  /// Controls how the transport reads from and writes to the response cache.
+  /// Has no effect when the transport was not initialised with a `PortalCache`. Defaults to `nil` (treated as `.useCache`).
+  public var cachePolicy: CachePolicy?
   
   // MARK: - Object lifecycle
   
@@ -62,13 +65,14 @@ public struct PortalRequest {
   ///   - scheme: Optional URL scheme override that replaces the scheme in the base URL (e.g., `.http` or `.https`).
   ///             Defaults to `.http`.
   ///   - timeout: Optional timeout request in seconds. Default to 30 seconds.
-  public init(method: HTTPMethod, path: Path, header: [Header]? = nil, body: Body? = nil, scheme: Scheme? = .http, timeout: TimeInterval? = 30) {
+  public init(method: HTTPMethod, path: Path, header: [Header]? = nil, body: Body? = nil, scheme: Scheme? = .http, timeout: TimeInterval? = 30, cachePolicy: CachePolicy? = nil) {
     self.method = method
     self.path = path
     self.header = header
     self.body = body
     self.scheme = scheme
     self.timeout = timeout
+    self.cachePolicy = cachePolicy
   }
 }
 
@@ -89,6 +93,17 @@ public struct Path {
   public let url: String
   /// Optional query parameters to append to the URL.
   public let query: [URLQueryItem]?
+  
+  /// Creates a new `Path` describing a destination URL and optional query parameters.
+  ///
+  /// - Parameters:
+  ///   - url: The base URL string for the request. This may be an absolute URL (e.g., "https://api.example.com/v1/items")
+  ///           or a relative path (e.g., "/v1/items") depending on how the client composes requests.
+  ///   - query: Optional array of `URLQueryItem` values to be appended to the URL's query string (e.g., `?page=1&limit=20`).
+  public init(url: String, query: [URLQueryItem]?) {
+    self.url = url
+    self.query = query
+  }
 }
 
 /// Represents the request body payload and how it should be encoded on the wire.
@@ -102,4 +117,15 @@ public struct Body {
   
   /// The wire format to use when serializing `data` (for example, JSON or URL-encoded form data).
   public let encoding: PortalRequest.Encoding
+
+  /// Creates a new request body with the given payload and wire encoding.
+  ///
+  /// - Parameters:
+  ///   - data: The `Encodable` payload to serialize into the HTTP body.
+  ///   - encoding: The wire format to use when serializing the payload (e.g., `.json` or `.urlEncoded`).
+  public init(data: Encodable, encoding: PortalRequest.Encoding) {
+    self.data = data
+    self.encoding = encoding
+  }
 }
+
