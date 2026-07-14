@@ -37,7 +37,16 @@ public struct NIOTransport: HTTPTransport {
             }
         }
 
-        let response = try await HTTPClient.shared.execute(httpRequest, timeout: .seconds(30))
+        try Task.checkCancellation()
+        let response = try await withTaskCancellationHandler {
+            try await HTTPClient.shared.execute(httpRequest, timeout: .seconds(30))
+        } onCancel: {
+            // AsyncHTTPClient does not auto-cancel on Task cancellation;
+            // checkCancellation above covers the pre-flight case.
+            // In-flight cancellation propagates via cooperative cancellation
+            // once the Swift runtime supports it in AsyncHTTPClient.
+        }
+        try Task.checkCancellation()
         let buffer = try await response.body.collect(upTo: 10 * 1024 * 1024)
         let data = Data(buffer: buffer)
         return (data, Int(response.status.code))

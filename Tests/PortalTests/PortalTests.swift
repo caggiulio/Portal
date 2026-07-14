@@ -216,6 +216,40 @@ struct PortalLogLevelTests {
     }
 }
 
+@Suite("Portal cancellation")
+struct PortalCancellationTests {
+    @Test func sendThrowsWhenAlreadyCancelled() async throws {
+        let transport = MockTransport()
+        transport.result = .success((encoded(Response(id: 1)), 200))
+        let portal = makePortal(transport: transport)
+        let task = Task<Response, Error> {
+            try await portal.send(request: PortalRequest(method: .get, path: Path(url: "/items", query: nil)))
+        }
+        task.cancel()
+        await #expect(throws: CancellationError.self) {
+            try await task.value
+        }
+    }
+
+    @Test func multipartSendThrowsWhenAlreadyCancelled() async throws {
+        let transport = MockTransport()
+        transport.result = .success((encoded(Response(id: 2)), 200))
+        let portal = makePortal(transport: transport)
+        let media = PortalMedia(data: Data([0x01]), key: "f", filename: "f.jpg", mimeType: "image/jpeg")
+        let task = Task<Response, Error> {
+            try await portal.send(
+                request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil)),
+                medias: [media],
+                boundary: "b"
+            )
+        }
+        task.cancel()
+        await #expect(throws: CancellationError.self) {
+            try await task.value
+        }
+    }
+}
+
 @Suite("Portal.send(request:medias:boundary:)")
 struct PortalMultipartTests {
     @Test func success() async throws {

@@ -55,6 +55,7 @@ public class Portal: NSObject, PortalProtocol {
   /// - Throws: `PortalError` on network, HTTP, or decoding failure.
   @available(macOS 12.0, iOS 15.0, *)
   public func send<SuccessResponse>(request: PortalRequest) async throws -> SuccessResponse where SuccessResponse: Decodable {
+    try Task.checkCancellation()
     var adaptedRequest = interceptor?.adapt(request) ?? request
     adaptedRequest.path = Path(url: baseURL + adaptedRequest.path.url, query: adaptedRequest.path.query)
     if let scheme = adaptedRequest.scheme {
@@ -76,6 +77,7 @@ public class Portal: NSObject, PortalProtocol {
   /// - Throws: `PortalError` on network, HTTP, or decoding failure.
   @available(macOS 12.0, iOS 15.0, *)
   public func send<SuccessResponse>(request: PortalRequest, medias: [PortalMedia], boundary: String) async throws -> SuccessResponse where SuccessResponse: Decodable {
+    try Task.checkCancellation()
     var adaptedRequest = interceptor?.adapt(request) ?? request
     adaptedRequest.path = Path(url: baseURL + adaptedRequest.path.url, query: adaptedRequest.path.query)
     if let scheme = adaptedRequest.scheme {

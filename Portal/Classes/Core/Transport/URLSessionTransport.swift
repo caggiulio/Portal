@@ -12,6 +12,7 @@ public struct URLSessionTransport: HTTPTransport {
     }
 
     public func execute(_ request: PortalRequest) async throws -> (Data, Int) {
+        try Task.checkCancellation()
         guard let url = buildURL(from: request) else {
             throw PortalError.invalidUrl
         }
