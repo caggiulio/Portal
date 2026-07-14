@@ -9,9 +9,9 @@ import Foundation
 
 /// Describes a single HTTP request passed to `Portal.send(request:)`.
 public struct PortalRequest {
-
+  
   // MARK: - Public properties
-
+  
   /// HTTP verb.
   public enum HTTPMethod: String {
     case get = "GET"
@@ -20,13 +20,13 @@ public struct PortalRequest {
     case patch = "PATCH"
     case delete = "DELETE"
   }
-
+  
   /// URL scheme for this request.
   public enum Scheme: String {
     case http
     case https
   }
-
+  
   /// How the body payload is serialised onto the wire.
   public enum Encoding {
     /// Serialises as `application/json`.
@@ -34,7 +34,7 @@ public struct PortalRequest {
     /// Serialises as `application/x-www-form-urlencoded`.
     case urlEncoded
   }
-
+  
   /// HTTP method for this request.
   public var method: HTTPMethod
   /// Destination URL and optional query items.
@@ -45,9 +45,11 @@ public struct PortalRequest {
   public var body: Body?
   /// Overrides the URL scheme. Replaces whatever scheme is in `baseURL`.
   public var scheme: Scheme?
-
+  /// The request timeout in seconds.
+  public var timeout: TimeInterval?
+  
   // MARK: - Object lifecycle
-
+  
   /// Creates a new PortalRequest describing a single HTTP call.
   ///
   /// - Parameters:
@@ -59,12 +61,14 @@ public struct PortalRequest {
   ///           (e.g., `.json` or `.urlEncoded`). Defaults to `nil`.
   ///   - scheme: Optional URL scheme override that replaces the scheme in the base URL (e.g., `.http` or `.https`).
   ///             Defaults to `.http`.
-  public init(method: HTTPMethod, path: Path, header: [String: Any]? = nil, body: Body? = nil, scheme: Scheme? = .http) {
+  ///   - timeout: Optional timeout request in seconds. Default to 30 seconds.
+  public init(method: HTTPMethod, path: Path, header: [String: Any]? = nil, body: Body? = nil, scheme: Scheme? = .http, timeout: TimeInterval? = 30) {
     self.method = method
     self.path = path
     self.header = header
     self.body = body
     self.scheme = scheme
+    self.timeout = timeout
   }
 }
 
@@ -95,7 +99,7 @@ public struct Body {
   /// The payload to send with the request. Any type conforming to `Encodable` is accepted
   /// and will be serialized according to the specified `encoding`.
   public let data: Encodable
-
+  
   /// The wire format to use when serializing `data` (for example, JSON or URL-encoded form data).
   public let encoding: PortalRequest.Encoding
 }
