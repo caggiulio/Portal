@@ -79,7 +79,7 @@ public class Portal: NSObject, PortalProtocol {
   }
 
   @available(macOS 12.0, iOS 15.0, *)
-  public func send<SuccessResponse>(request: PortalRequest, medias: [PortalMedia], boundary: String) async throws -> SuccessResponse where SuccessResponse: Decodable {
+  public func send<SuccessResponse>(request: PortalRequest, medias: [PortalMedia], boundary: String = UUID().uuidString) async throws -> SuccessResponse where SuccessResponse: Decodable {
     try Task.checkCancellation()
     var adaptedRequest = interceptor?.adapt(request) ?? request
     adaptedRequest.path = Path(url: baseURL + adaptedRequest.path.url, query: adaptedRequest.path.query)
@@ -94,7 +94,7 @@ public class Portal: NSObject, PortalProtocol {
   }
 
   @available(macOS 12.0, iOS 15.0, *)
-  public func send(request: PortalRequest, medias: [PortalMedia], boundary: String) async throws {
+  public func send(request: PortalRequest, medias: [PortalMedia], boundary: String = UUID().uuidString) async throws {
     try Task.checkCancellation()
     var adaptedRequest = interceptor?.adapt(request) ?? request
     adaptedRequest.path = Path(url: baseURL + adaptedRequest.path.url, query: adaptedRequest.path.query)
@@ -120,7 +120,7 @@ private extension Portal {
     return components.string ?? urlString
   }
 
-  func buildMultipartRequest(from request: PortalRequest, medias: [PortalMedia], boundary: String) -> PortalRequest {
+  func buildMultipartRequest(from request: PortalRequest, medias: [PortalMedia], boundary: String = UUID().uuidString) -> PortalRequest {
     let body = makeMultipartBody(request: request, medias: medias, boundary: boundary)
     // Wrap raw multipart data as a custom body via a RawDataEncodable shim
     var headers = request.header ?? [:]
@@ -134,7 +134,7 @@ private extension Portal {
   }
 
   /// This method is used to build the HTTP multipart Body
-  func makeMultipartBody(request: PortalRequest, medias: [PortalMedia]?, boundary: String) -> Data {
+  func makeMultipartBody(request: PortalRequest, medias: [PortalMedia]?, boundary: String = UUID().uuidString) -> Data {
     func append(_ string: String, to data: inout Data) {
       guard let dataToAppend = string.data(using: .utf8) else {
         assertionFailure("Could not append data!")
