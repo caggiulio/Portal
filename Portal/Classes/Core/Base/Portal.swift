@@ -50,18 +50,9 @@ public class Portal: NSObject, PortalProtocol {
   // MARK: - iOS > 15 Protocols
 
   @available(macOS 12.0, iOS 15.0, *)
-  public func send<SuccessResponse>(request: PortalRequest) async throws -> SuccessResponse where SuccessResponse: Decodable {
-    try Task.checkCancellation()
-    var adaptedRequest = interceptor?.adapt(request) ?? request
-    adaptedRequest.path = Path(url: baseURL + adaptedRequest.path.url, query: adaptedRequest.path.query)
-    if let scheme = adaptedRequest.scheme {
-      adaptedRequest.path = Path(url: applyScheme(scheme, to: adaptedRequest.path.url), query: adaptedRequest.path.query)
-    }
-    logger.logRequest(adaptedRequest)
-    let (data, statusCode) = try await transport.execute(adaptedRequest)
-    logger.logResponse(statusCode: statusCode, data: data, error: nil)
-
-    return try await handleResponse(data: data, statusCode: statusCode, originalRequest: adaptedRequest)
+  public func send<SuccessResponse: Decodable>(request: PortalRequest, decoding: SuccessResponse.Type) async throws -> SuccessResponse {
+    let result: SuccessResponse = try await send(request: request)
+    return result
   }
 
   @available(macOS 12.0, iOS 15.0, *)
@@ -79,20 +70,11 @@ public class Portal: NSObject, PortalProtocol {
   }
 
   @available(macOS 12.0, iOS 15.0, *)
-  public func send<SuccessResponse>(request: PortalRequest, medias: [PortalMedia], boundary: String = UUID().uuidString) async throws -> SuccessResponse where SuccessResponse: Decodable {
-    try Task.checkCancellation()
-    var adaptedRequest = interceptor?.adapt(request) ?? request
-    adaptedRequest.path = Path(url: baseURL + adaptedRequest.path.url, query: adaptedRequest.path.query)
-    if let scheme = adaptedRequest.scheme {
-      adaptedRequest.path = Path(url: applyScheme(scheme, to: adaptedRequest.path.url), query: adaptedRequest.path.query)
-    }
-    let multipartRequest = buildMultipartRequest(from: adaptedRequest, medias: medias, boundary: boundary)
-    let (data, statusCode) = try await transport.execute(multipartRequest)
-    logger.logResponse(statusCode: statusCode, data: data, error: nil)
-
-    return try await handleResponse(data: data, statusCode: statusCode, originalRequest: multipartRequest)
+  public func send<SuccessResponse: Decodable>(request: PortalRequest, medias: [PortalMedia], boundary: String = UUID().uuidString, decoding: SuccessResponse.Type) async throws -> SuccessResponse {
+    let result: SuccessResponse = try await send(request: request, medias: medias, boundary: boundary)
+    return result
   }
-
+  
   @available(macOS 12.0, iOS 15.0, *)
   public func send(request: PortalRequest, medias: [PortalMedia], boundary: String = UUID().uuidString) async throws {
     try Task.checkCancellation()
@@ -105,6 +87,36 @@ public class Portal: NSObject, PortalProtocol {
     let (data, statusCode) = try await transport.execute(multipartRequest)
     logger.logResponse(statusCode: statusCode, data: data, error: nil)
     try await handleEmptyResponse(data: data, statusCode: statusCode, originalRequest: multipartRequest)
+  }
+  
+  @available(macOS 12.0, iOS 15.0, *)
+  func send<SuccessResponse>(request: PortalRequest) async throws -> SuccessResponse where SuccessResponse: Decodable {
+    try Task.checkCancellation()
+    var adaptedRequest = interceptor?.adapt(request) ?? request
+    adaptedRequest.path = Path(url: baseURL + adaptedRequest.path.url, query: adaptedRequest.path.query)
+    if let scheme = adaptedRequest.scheme {
+      adaptedRequest.path = Path(url: applyScheme(scheme, to: adaptedRequest.path.url), query: adaptedRequest.path.query)
+    }
+    logger.logRequest(adaptedRequest)
+    let (data, statusCode) = try await transport.execute(adaptedRequest)
+    logger.logResponse(statusCode: statusCode, data: data, error: nil)
+
+    return try await handleResponse(data: data, statusCode: statusCode, originalRequest: adaptedRequest)
+  }
+
+  @available(macOS 12.0, iOS 15.0, *)
+  func send<SuccessResponse>(request: PortalRequest, medias: [PortalMedia], boundary: String = UUID().uuidString) async throws -> SuccessResponse where SuccessResponse: Decodable {
+    try Task.checkCancellation()
+    var adaptedRequest = interceptor?.adapt(request) ?? request
+    adaptedRequest.path = Path(url: baseURL + adaptedRequest.path.url, query: adaptedRequest.path.query)
+    if let scheme = adaptedRequest.scheme {
+      adaptedRequest.path = Path(url: applyScheme(scheme, to: adaptedRequest.path.url), query: adaptedRequest.path.query)
+    }
+    let multipartRequest = buildMultipartRequest(from: adaptedRequest, medias: medias, boundary: boundary)
+    let (data, statusCode) = try await transport.execute(multipartRequest)
+    logger.logResponse(statusCode: statusCode, data: data, error: nil)
+
+    return try await handleResponse(data: data, statusCode: statusCode, originalRequest: multipartRequest)
   }
 }
 

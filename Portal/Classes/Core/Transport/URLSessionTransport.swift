@@ -71,7 +71,6 @@ public struct URLSessionTransport: HTTPTransport {
     guard let url = buildURL(from: request) else { throw PortalError.invalidUrl }
     var urlRequest = URLRequest(url: url)
     urlRequest.httpMethod = request.method.rawValue
-    urlRequest.cachePolicy = .reloadIgnoringLocalCacheData
     if let timeout = request.timeout { urlRequest.timeoutInterval = timeout }
     request.header?.forEach { urlRequest.setValue($0.value.rawValue, forHTTPHeaderField: $0.key.rawValue) }
     if let body = request.body {

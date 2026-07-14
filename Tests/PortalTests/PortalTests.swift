@@ -111,6 +111,16 @@ struct PortalSendTests {
         )
         #expect(transport.lastRequest?.path.url.hasPrefix("https://") == true)
     }
+
+    @Test func decodingWithExplicitType() async throws {
+        let transport = MockTransport()
+        transport.result = .success((encoded(Response(id: 42)), 200))
+        let response = try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .get, path: Path(url: "/items", query: nil)),
+            decoding: Response.self
+        )
+        #expect(response.id == 42)
+    }
 }
 
 @Suite("Portal interceptor")
