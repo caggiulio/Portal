@@ -15,6 +15,12 @@ public protocol PortalProtocol {
   /// - Parameter request: The `PortalRequest` object with HTTP information request.
   /// - Returns `SuccessResponse` using `async await` pattern. `SuccessResponse` is a Decodable to decode in HTTP response.
   func send<SuccessResponse: Decodable>(request: PortalRequest) async throws -> SuccessResponse
+  
+  @available(macOS 12.0, iOS 15.0, *)
+  /// This is the func to use to make an HTTP call in async/await version with an empty response.
+  /// - Parameter request: The `PortalRequest` object with HTTP information request.
+  /// - Returns `SuccessResponse` using `async await` pattern. `SuccessResponse` is a Decodable to decode in HTTP response.
+  func send(request: PortalRequest) async throws
 
   /// This is the func to use to make an HTTP multipart call in async/await version.
   /// - Parameters:
@@ -24,4 +30,13 @@ public protocol PortalProtocol {
   /// - Returns `SuccessResponse` using `async await` pattern. `SuccessResponse` is a Decodable to decode in HTTP response.
   @available(macOS 12.0, iOS 15.0, *)
   func send<SuccessResponse: Decodable>(request: PortalRequest, medias: [PortalMedia], boundary: String) async throws -> SuccessResponse
+  
+  /// This is the func to use to make an HTTP multipart call in async/await version with an empty response.
+  /// - Parameters:
+  ///   - request: The `PortalRequest` object with HTTP information request.
+  ///   - medias: Array of `PortalMedia` object with media informations to upload.
+  ///   - boundary: The boundary of HTTP multipart request.
+  /// - Returns `SuccessResponse` using `async await` pattern. `SuccessResponse` is a Decodable to decode in HTTP response.
+  @available(macOS 12.0, iOS 15.0, *)
+  func send(request: PortalRequest, medias: [PortalMedia], boundary: String) async throws
 }

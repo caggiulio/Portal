@@ -49,10 +49,6 @@ public class Portal: NSObject, PortalProtocol {
 
   // MARK: - iOS > 15 Protocols
 
-  /// Sends a standard HTTP request and decodes the response.
-  /// - Parameter request: The request descriptor.
-  /// - Returns: Decoded `SuccessResponse` on a 2xx status.
-  /// - Throws: `PortalError` on network, HTTP, or decoding failure.
   @available(macOS 12.0, iOS 15.0, *)
   public func send<SuccessResponse>(request: PortalRequest) async throws -> SuccessResponse where SuccessResponse: Decodable {
     try Task.checkCancellation()
@@ -68,13 +64,20 @@ public class Portal: NSObject, PortalProtocol {
     return try await handleResponse(data: data, statusCode: statusCode, originalRequest: adaptedRequest)
   }
 
-  /// Sends a multipart/form-data request and decodes the response.
-  /// - Parameters:
-  ///   - request: The request descriptor (body fields are embedded as form parts).
-  ///   - medias: File attachments to include in the multipart body.
-  ///   - boundary: Unique boundary string separating multipart parts.
-  /// - Returns: Decoded `SuccessResponse` on a 2xx status.
-  /// - Throws: `PortalError` on network, HTTP, or decoding failure.
+  @available(macOS 12.0, iOS 15.0, *)
+  public func send(request: PortalRequest) async throws {
+    try Task.checkCancellation()
+    var adaptedRequest = interceptor?.adapt(request) ?? request
+    adaptedRequest.path = Path(url: baseURL + adaptedRequest.path.url, query: adaptedRequest.path.query)
+    if let scheme = adaptedRequest.scheme {
+      adaptedRequest.path = Path(url: applyScheme(scheme, to: adaptedRequest.path.url), query: adaptedRequest.path.query)
+    }
+    logger.logRequest(adaptedRequest)
+    let (data, statusCode) = try await transport.execute(adaptedRequest)
+    logger.logResponse(statusCode: statusCode, data: data, error: nil)
+    try await handleEmptyResponse(data: data, statusCode: statusCode, originalRequest: adaptedRequest)
+  }
+
   @available(macOS 12.0, iOS 15.0, *)
   public func send<SuccessResponse>(request: PortalRequest, medias: [PortalMedia], boundary: String) async throws -> SuccessResponse where SuccessResponse: Decodable {
     try Task.checkCancellation()
@@ -88,6 +91,20 @@ public class Portal: NSObject, PortalProtocol {
     logger.logResponse(statusCode: statusCode, data: data, error: nil)
 
     return try await handleResponse(data: data, statusCode: statusCode, originalRequest: multipartRequest)
+  }
+
+  @available(macOS 12.0, iOS 15.0, *)
+  public func send(request: PortalRequest, medias: [PortalMedia], boundary: String) async throws {
+    try Task.checkCancellation()
+    var adaptedRequest = interceptor?.adapt(request) ?? request
+    adaptedRequest.path = Path(url: baseURL + adaptedRequest.path.url, query: adaptedRequest.path.query)
+    if let scheme = adaptedRequest.scheme {
+      adaptedRequest.path = Path(url: applyScheme(scheme, to: adaptedRequest.path.url), query: adaptedRequest.path.query)
+    }
+    let multipartRequest = buildMultipartRequest(from: adaptedRequest, medias: medias, boundary: boundary)
+    let (data, statusCode) = try await transport.execute(multipartRequest)
+    logger.logResponse(statusCode: statusCode, data: data, error: nil)
+    try await handleEmptyResponse(data: data, statusCode: statusCode, originalRequest: multipartRequest)
   }
 }
 
@@ -172,6 +189,28 @@ private extension Portal {
       logger.logResponse(statusCode: statusCode, data: data, error: error)
       
       return try await shouldRetry(request: originalRequest, error: error)
+    }
+  }
+
+  func handleEmptyResponse(data: Data, statusCode: Int, originalRequest: PortalRequest) async throws {
+    switch statusCode {
+    case 200...299:
+      return
+    default:
+      let error = PortalError.underlying(statusCode: statusCode, data: data)
+      logger.logResponse(statusCode: statusCode, data: data, error: error)
+      try await shouldRetryEmpty(request: originalRequest, error: error)
+    }
+  }
+
+  func shouldRetryEmpty(request: PortalRequest, error: Error) async throws {
+    guard let interceptor else { throw error }
+    let result = try await interceptor.retry(request, dueTo: error)
+    switch result {
+    case .retry:
+      try await send(request: request)
+    case .doNotRetry:
+      throw error
     }
   }
 

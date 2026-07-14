@@ -336,3 +336,100 @@ struct PortalMultipartTests {
         #expect(response.id == 10)
     }
 }
+
+@Suite("Portal.send(request:) empty response")
+struct PortalEmptyResponseTests {
+    @Test func success() async throws {
+        let transport = MockTransport()
+        transport.result = .success((Data(), 204))
+        try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .delete, path: Path(url: "/items/1", query: nil))
+        )
+    }
+
+    @Test func non2xxThrows() async throws {
+        let transport = MockTransport()
+        transport.result = .success((Data(), 404))
+        await #expect(throws: (any Error).self) {
+            try await makePortal(transport: transport).send(
+                request: PortalRequest(method: .delete, path: Path(url: "/missing", query: nil))
+            )
+        }
+    }
+
+    @Test func non2xxThrowsUnderlying() async throws {
+        let transport = MockTransport()
+        transport.result = .success((Data(), 500))
+        do {
+            try await makePortal(transport: transport).send(
+                request: PortalRequest(method: .get, path: Path(url: "/fail", query: nil))
+            )
+            Issue.record("expected throw")
+        } catch let error as PortalError {
+            if case .underlying(let code, _) = error { #expect(code == 500) }
+            else { Issue.record("wrong error type") }
+        }
+    }
+
+    @Test func retryOnInterceptor() async throws {
+        let transport = MockTransport()
+        var callCount = 0
+        transport.resultProvider = {
+            callCount += 1
+            return callCount == 1 ? .success((Data(), 401)) : .success((Data(), 204))
+        }
+        final class RetryOnce: PortalInterceptorProtocol {
+            var retried = false
+            func retry(_ request: PortalRequest, dueTo error: Error) async throws -> RetryResult {
+                if retried { return .doNotRetry }
+                retried = true
+                return .retry
+            }
+        }
+        try await makePortal(transport: transport, interceptor: RetryOnce()).send(
+            request: PortalRequest(method: .get, path: Path(url: "/auth", query: nil))
+        )
+        #expect(callCount == 2)
+    }
+}
+
+@Suite("Portal.send(request:medias:boundary:) empty response")
+struct PortalEmptyMultipartResponseTests {
+    @Test func success() async throws {
+        let transport = MockTransport()
+        transport.result = .success((Data(), 200))
+        let media = PortalMedia(data: Data([0x01]), key: "file", filename: "f.jpg", mimeType: "image/jpeg")
+        try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil)),
+            medias: [media],
+            boundary: "b"
+        )
+    }
+
+    @Test func non2xxThrows() async throws {
+        let transport = MockTransport()
+        transport.result = .success((Data(), 422))
+        let media = PortalMedia(data: Data([0x01]), key: "file", filename: "f.jpg", mimeType: "image/jpeg")
+        await #expect(throws: (any Error).self) {
+            try await makePortal(transport: transport).send(
+                request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil)),
+                medias: [media],
+                boundary: "b"
+            )
+        }
+    }
+
+    @Test func setsContentTypeHeader() async throws {
+        let transport = MockTransport()
+        transport.result = .success((Data(), 201))
+        let media = PortalMedia(data: Data([0xFF]), key: "img", filename: "img.png", mimeType: "image/png")
+        try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil)),
+            medias: [media],
+            boundary: "testboundary"
+        )
+        let contentType = transport.lastRequest?.header?["Content-Type"] as? String
+        #expect(contentType?.contains("multipart/form-data") == true)
+        #expect(contentType?.contains("testboundary") == true)
+    }
+}
