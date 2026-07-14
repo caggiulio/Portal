@@ -39,3 +39,6 @@ Carthage/Build/
 
 # Logs
 *.log
+
+# Docs
+docs/
