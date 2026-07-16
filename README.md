@@ -113,7 +113,11 @@ struct User: Decodable {
     let name: String
 }
 
-let user: User = try await portal.send(request: request)
+let response: PortalResponse<User> = try await portal.send(request: request)
+let user = response.value          // decoded body
+let status = response.statusCode   // e.g. 200
+let headers = response.headers     // [Header]
+let sent = response.request        // adapted PortalRequest
 ```
 
 ---
@@ -276,7 +280,7 @@ let image = PortalMedia(
 )
 
 let boundary = UUID().uuidString
-let response: UploadResponse = try await portal.send(
+let response: PortalResponse<UploadResponse> = try await portal.send(
     request: uploadRequest,
     medias: [image],
     boundary: boundary
@@ -351,7 +355,7 @@ Portal/
 │       ├── Core/
 │       │   ├── Base/          # Portal + PortalProtocol
 │       │   ├── Transport/     # HTTPTransport + URLSessionTransport
-│       │   ├── Models/        # PortalRequest, PortalMedia
+│       │   ├── Models/        # PortalRequest, PortalMedia, PortalResponse
 │       │   ├── Error/         # PortalError
 │       │   ├── Interceptor/   # PortalInterceptorProtocol
 │       │   └── Logger/        # PortalTraceLogger

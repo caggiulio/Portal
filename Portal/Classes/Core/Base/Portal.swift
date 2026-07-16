@@ -47,7 +47,7 @@ public class Portal: NSObject, PortalProtocol {
     self.interceptor = interceptor
   }
 
-  // MARK: - iOS > 15 Protocols
+  // MARK: - Protocol
 
   @available(macOS 12.0, iOS 15.0, *)
   public func send<SuccessResponse: Decodable>(request: PortalRequest, decoding: SuccessResponse.Type) async throws -> PortalResponse<SuccessResponse> {
@@ -66,6 +66,7 @@ public class Portal: NSObject, PortalProtocol {
     logger.logRequest(adaptedRequest)
     let (data, statusCode, headers) = try await transport.execute(adaptedRequest)
     logger.logResponse(statusCode: statusCode, data: data, error: nil)
+    
     return try await handleEmptyResponse(data: data, statusCode: statusCode, headers: headers, originalRequest: adaptedRequest)
   }
 
@@ -86,6 +87,7 @@ public class Portal: NSObject, PortalProtocol {
     let multipartRequest = buildMultipartRequest(from: adaptedRequest, medias: medias, boundary: boundary)
     let (data, statusCode, headers) = try await transport.execute(multipartRequest)
     logger.logResponse(statusCode: statusCode, data: data, error: nil)
+    
     return try await handleEmptyResponse(data: data, statusCode: statusCode, headers: headers, originalRequest: multipartRequest)
   }
 
@@ -100,6 +102,7 @@ public class Portal: NSObject, PortalProtocol {
     logger.logRequest(adaptedRequest)
     let (data, statusCode, headers) = try await transport.execute(adaptedRequest)
     logger.logResponse(statusCode: statusCode, data: data, error: nil)
+    
     return try await handleResponse(data: data, statusCode: statusCode, headers: headers, originalRequest: adaptedRequest)
   }
 
@@ -114,6 +117,7 @@ public class Portal: NSObject, PortalProtocol {
     let multipartRequest = buildMultipartRequest(from: adaptedRequest, medias: medias, boundary: boundary)
     let (data, statusCode, headers) = try await transport.execute(multipartRequest)
     logger.logResponse(statusCode: statusCode, data: data, error: nil)
+    
     return try await handleResponse(data: data, statusCode: statusCode, headers: headers, originalRequest: multipartRequest)
   }
 }
@@ -127,6 +131,7 @@ private extension Portal {
     }
     guard var components = URLComponents(string: urlString) else { return urlString }
     components.scheme = scheme.rawValue
+    
     return components.string ?? urlString
   }
 
@@ -135,6 +140,7 @@ private extension Portal {
     // Wrap raw multipart data as a custom body via a RawDataEncodable shim
     var headers = request.header ?? []
     headers.append(Header(key: .contentType, value: .multipartFormData(boundary: boundary)))
+    
     return PortalRequest(
       method: request.method,
       path: request.path,
@@ -198,6 +204,7 @@ private extension Portal {
     default:
       let error = PortalError.underlying(statusCode: statusCode, data: data)
       logger.logResponse(statusCode: statusCode, data: data, error: error)
+      
       return try await shouldRetry(request: originalRequest, error: error)
     }
   }
@@ -206,9 +213,11 @@ private extension Portal {
     switch statusCode {
     case 200...299:
       return PortalResponse(value: (), statusCode: statusCode, headers: headers, request: originalRequest)
+   
     default:
       let error = PortalError.underlying(statusCode: statusCode, data: data)
       logger.logResponse(statusCode: statusCode, data: data, error: error)
+      
       return try await shouldRetryEmpty(request: originalRequest, error: error)
     }
   }
@@ -219,6 +228,7 @@ private extension Portal {
     switch result {
     case .retry:
       return try await send(request: request)
+    
     case .doNotRetry:
       throw error
     }
@@ -230,6 +240,7 @@ private extension Portal {
     switch result {
     case .retry:
       return try await send(request: request)
+    
     case .doNotRetry:
       throw error
     }
