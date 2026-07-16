@@ -12,7 +12,19 @@
   <img src="https://img.shields.io/badge/SPM-compatible-brightgreen?style=flat"/>
   <img src="https://img.shields.io/badge/License-MIT-lightgrey?style=flat"/>
   <img src="https://img.shields.io/badge/Test%20Coverage-~98%25-brightgreen?style=flat&logo=checkmarx"/>
+  <img src="https://img.shields.io/badge/Status-Early%20Release%20%7C%20WIP-orange?style=flat"/>
 </p>
+
+> **Early release.** Portal is actively developed. The core API is stable, but new features — persistent caching, disk-backed stores, additional interceptor utilities, and broader Android tooling — are planned for upcoming releases. Feedback and contributions are welcome.
+
+---
+
+<p align="center">
+  <img src="assets/screenshot-ios.png" alt="Portal running on iOS" width="48%"/>
+  &nbsp;
+  <img src="assets/screenshot-android.png" alt="Portal running on Android" width="48%"/>
+</p>
+<p align="center"><em>Same Swift networking code running on iOS (left) and Android (right)</em></p>
 
 ---
 
@@ -370,7 +382,149 @@ Portal/
 
 Portal runs on Android through [Swift on Android](https://www.swift.org/documentation/android/). Use the `PortalNIO` target — it has zero Apple-platform dependencies. The underlying `AsyncHTTPClient` and `SwiftNIO` libraries have full Linux/Android support.
 
-A typical Android integration uses the Swift Android SDK toolchain to compile your Swift networking layer and bridge it to the Android app via JNI or a higher-level framework such as [Skip](https://skip.tools).
+### How it works
+
+The bridge from Swift to Android is provided by [swift-java](https://github.com/swiftlang/swift-java). It compiles your Swift code with the Android SDK cross-compiler, generates JNI bindings automatically, and packages everything as a shared `.so` library that your Android app loads at runtime.
+
+### Prerequisites
+
+- [Swiftly](https://github.com/swiftlang/swiftly) with Swift 6.3+
+- [Android Swift SDK](https://github.com/finagolfin/swift-android-sdk) (`6.3.3-RELEASE_android` or later)
+- Android Studio / Gradle 8+
+- `JAVA_HOME` pointing to the Android Studio JDK:
+
+```bash
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+```
+
+### Project structure
+
+An Android integration requires two separate pieces alongside your Portal library:
+
+```
+Developer/
+├── Portal/                  # this library
+├── PortalAndroidLib/        # Swift package — wraps Portal, exposes JNI surface
+└── PortalAndroidApp/        # Android app — Gradle project
+```
+
+### 1. Swift wrapper package (`PortalAndroidLib`)
+
+Create a Swift package that depends on Portal and enables `JExtractSwiftPlugin`:
+
+```swift
+// Package.swift
+let package = Package(
+    name: "PortalAndroidLib",
+    platforms: [.macOS(.v15)],
+    products: [
+        .library(name: "PortalAndroidLib", type: .dynamic, targets: ["PortalAndroidLib"]),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/swiftlang/swift-java", from: "0.1.2"),
+        .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.21.0"),
+        .package(name: "Portal", path: "../Portal"),
+    ],
+    targets: [
+        .target(
+            name: "PortalAndroidLib",
+            dependencies: [
+                .product(name: "SwiftJava", package: "swift-java"),
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
+                .product(name: "Portal", package: "Portal"),
+                .product(name: "PortalNIO", package: "Portal"),
+            ],
+            exclude: ["swift-java.config"],
+            swiftSettings: [.swiftLanguageMode(.v5)],
+            plugins: [
+                .plugin(name: "JExtractSwiftPlugin", package: "swift-java"),
+            ]
+        ),
+    ]
+)
+```
+
+Add `Sources/PortalAndroidLib/swift-java.config` to tell swift-java the Java package name:
+
+```json
+{
+  "javaPackage": "com.example.portalandroidlib",
+  "mode": "jni"
+}
+```
+
+Expose Portal functionality through a `public final class` — swift-java generates a Java binding for each public method:
+
+```swift
+// Sources/PortalAndroidLib/PortalClient.swift
+import Portal
+#if os(Android)
+import PortalNIO
+#endif
+
+public final class PortalClient {
+    public init() {}
+
+    public func fetch(url: String) async throws -> String {
+        let transport: HTTPTransport
+        #if os(Android)
+        transport = NIOTransport(cache: InMemoryCache())
+        #else
+        transport = URLSessionTransport(cache: InMemoryCache())
+        #endif
+
+        let client = Portal(baseURL: "jsonplaceholder.typicode.com/", transport: transport)
+        let request = PortalRequest(method: .get, path: Path(url: "todos/1", query: nil), scheme: .https)
+        let response = try await client.send(request: request, decoding: Todo.self)
+        return "[\(response.statusCode)] \(response.value)"
+    }
+}
+```
+
+### 2. Android app (`PortalAndroidApp`)
+
+The Gradle `swift-lib` module drives the Swift cross-compilation and copies `.so` libraries into the APK. The key configuration in `swift-lib/build.gradle`:
+
+```groovy
+def swiftPackageDir = file("${projectDir}/../../PortalAndroidLib")
+def libName = "PortalAndroidLib"
+
+// Cross-compile for each ABI
+abis.each { abi, info ->
+    tasks.register("buildSwift${abi}", Exec) {
+        workingDir = swiftPackageDir
+        executable(getSwiftlyPath())
+        args("run", "swift", "build", "+6.3", "--swift-sdk", info.triple,
+             "--build-system", "native", "--disable-sandbox")
+    }
+}
+```
+
+The generated Java bindings (produced by `JExtractSwiftPlugin`) are added automatically as a source directory — no manual JNI code required.
+
+On the Kotlin side, use the generated `PortalClient` class directly:
+
+```kotlin
+import com.example.portalandroidlib.PortalClient
+import org.swift.swiftkit.core.SwiftArena
+
+val arena = SwiftArena.ofAuto()
+val client = PortalClient.init(arena)
+val result = client.fetch(url = "https://...").await()
+```
+
+### Build
+
+```bash
+# First build: cross-compile Swift for Android (arm64 + x86_64)
+cd PortalAndroidApp
+./gradlew :swift-lib:buildSwiftAll
+
+# Subsequent builds (or from Android Studio)
+./gradlew assembleDebug
+```
+
+> **Note:** `JAVA_HOME` must be set before running `./gradlew`. Android Studio inherits it from the shell environment; if it isn't set system-wide, add `org.gradle.java.home=<path>` to `gradle.properties`.
 
 ---
 
