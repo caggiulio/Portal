@@ -34,5 +34,13 @@ let package = Package(
       name: "PortalTests",
       dependencies: ["Portal"]
     ),
+    .testTarget(
+      name: "PortalNIOTests",
+      dependencies: [
+        "PortalNIO",
+        .product(name: "AsyncHTTPClient", package: "async-http-client"),
+        .product(name: "NIOFoundationCompat", package: "swift-nio"),
+      ]
+    ),
   ]
 )
