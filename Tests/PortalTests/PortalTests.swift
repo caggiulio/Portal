@@ -159,6 +159,22 @@ struct PortalSendTests {
         let response = try await makePortal(transport: transport).send(request: request, decoding: Response.self)
         #expect(response.request.path.url.contains("/items"))
     }
+
+    @Test func responseContainsAllHeaders() async throws {
+        let transport = MockTransport()
+        let responseHeaders: [Header] = [
+            Header(key: "X-Request-ID", value: "abc"),
+            Header(key: "X-Rate-Limit", value: "100"),
+            Header(key: "Content-Type", value: "application/json")
+        ]
+        transport.result = .success((encoded(Response(id: 1)), 200, responseHeaders))
+        let response = try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .get, path: Path(url: "/items", query: nil)),
+            decoding: Response.self
+        )
+        #expect(response.headers.count == 3)
+        #expect(response.headers.first(where: { $0.key.rawValue == "X-Rate-Limit" })?.value.rawValue == "100")
+    }
 }
 
 @Suite("Portal interceptor")
@@ -218,6 +234,35 @@ struct PortalInterceptorTests {
             decoding: Response.self
         )
         #expect(response.value.id == 42)
+    }
+
+    @Test func retryResponseMetadataIsFromSuccessfulAttempt() async throws {
+        let transport = MockTransport()
+        transport.result = .success((Data(), 401, [Header(key: "X-Attempt", value: "1")]))
+
+        final class RetryOnceInterceptor: PortalInterceptorProtocol {
+            var retried = false
+            let transport: MockTransport
+            let successData: Data
+            init(transport: MockTransport, successData: Data) { self.transport = transport; self.successData = successData }
+            func retry(_ request: PortalRequest, dueTo error: Error) async throws -> RetryResult {
+                if !retried {
+                    retried = true
+                    transport.result = .success((successData, 200, [Header(key: "X-Attempt", value: "2")]))
+                    return .retry
+                }
+                return .doNotRetry
+            }
+        }
+
+        let successData = encoded(Response(id: 99))
+        let interceptor = RetryOnceInterceptor(transport: transport, successData: successData)
+        let response = try await makePortal(transport: transport, interceptor: interceptor).send(
+            request: PortalRequest(method: .get, path: Path(url: "/retry", query: nil)),
+            decoding: Response.self
+        )
+        #expect(response.statusCode == 200)
+        #expect(response.headers.first(where: { $0.key.rawValue == "X-Attempt" })?.value.rawValue == "2")
     }
 }
 
@@ -398,6 +443,32 @@ struct PortalMultipartTests {
         )
         #expect(response.value.id == 10)
     }
+
+    @Test func multipartResponseContainsStatusCode() async throws {
+        let transport = MockTransport()
+        transport.result = .success((encoded(Response(id: 11)), 201, []))
+        let media = PortalMedia(data: Data([0x01]), key: "file", filename: "f.jpg", mimeType: "image/jpeg")
+        let response = try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil)),
+            medias: [media],
+            boundary: "b",
+            decoding: Response.self
+        )
+        #expect(response.statusCode == 201)
+    }
+
+    @Test func multipartResponseContainsHeaders() async throws {
+        let transport = MockTransport()
+        transport.result = .success((encoded(Response(id: 12)), 200, [Header(key: "X-Upload-ID", value: "u42")]))
+        let media = PortalMedia(data: Data([0x01]), key: "file", filename: "f.jpg", mimeType: "image/jpeg")
+        let response = try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil)),
+            medias: [media],
+            boundary: "b",
+            decoding: Response.self
+        )
+        #expect(response.headers.first(where: { $0.key.rawValue == "X-Upload-ID" })?.value.rawValue == "u42")
+    }
 }
 
 @Suite("Portal.send(request:) empty response")
@@ -462,6 +533,24 @@ struct PortalEmptyResponseTests {
             request: PortalRequest(method: .delete, path: Path(url: "/items/1", query: nil))
         )
         #expect(response.statusCode == 204)
+    }
+
+    @Test func emptyResponseContainsHeaders() async throws {
+        let transport = MockTransport()
+        transport.result = .success((Data(), 204, [Header(key: "X-Trace-ID", value: "xyz")]))
+        let response = try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .delete, path: Path(url: "/items/1", query: nil))
+        )
+        #expect(response.headers.first(where: { $0.key.rawValue == "X-Trace-ID" })?.value.rawValue == "xyz")
+    }
+
+    @Test func emptyResponseContainsRequest() async throws {
+        let transport = MockTransport()
+        transport.result = .success((Data(), 204, []))
+        let response = try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .delete, path: Path(url: "/items/1", query: nil))
+        )
+        #expect(response.request.path.url.contains("/items/1"))
     }
 }
 
