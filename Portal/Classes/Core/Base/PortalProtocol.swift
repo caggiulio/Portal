@@ -20,12 +20,14 @@ public protocol PortalProtocol {
   ///   - decoding: The `Decodable` type to decode the response body into.
   /// - Returns: A decoded instance of `SuccessResponse`.
   @available(macOS 12.0, iOS 15.0, *)
-  func send<SuccessResponse: Decodable>(request: PortalRequest, decoding: SuccessResponse.Type) async throws -> SuccessResponse
+  func send<SuccessResponse: Decodable>(request: PortalRequest, decoding: SuccessResponse.Type) async throws -> PortalResponse<SuccessResponse>
 
-  /// Performs an HTTP request, discarding the response body.
+  /// Performs an HTTP request, ignoring the response body.
   /// - Parameter request: The `PortalRequest` describing the HTTP call.
+  /// - Returns: A `PortalResponse<Void>` containing status code, headers, and the adapted request.
   @available(macOS 12.0, iOS 15.0, *)
-  func send(request: PortalRequest) async throws
+  @discardableResult
+  func send(request: PortalRequest) async throws -> PortalResponse<Void>
 
   // MARK: - Multipart requests
 
@@ -35,15 +37,17 @@ public protocol PortalProtocol {
   ///   - medias: Media attachments to include in the multipart body.
   ///   - boundary: The multipart boundary string.
   ///   - decoding: The `Decodable` type to decode the response body into.
-  /// - Returns: A decoded instance of `SuccessResponse`.
+  /// - Returns: A `PortalResponse` wrapping the decoded `SuccessResponse`.
   @available(macOS 12.0, iOS 15.0, *)
-  func send<SuccessResponse: Decodable>(request: PortalRequest, medias: [PortalMedia], boundary: String, decoding: SuccessResponse.Type) async throws -> SuccessResponse
+  func send<SuccessResponse: Decodable>(request: PortalRequest, medias: [PortalMedia], boundary: String, decoding: SuccessResponse.Type) async throws -> PortalResponse<SuccessResponse>
 
-  /// Performs a multipart HTTP request, discarding the response body.
+  /// Performs a multipart HTTP request, ignoring the response body.
   /// - Parameters:
   ///   - request: The `PortalRequest` describing the HTTP call.
   ///   - medias: Media attachments to include in the multipart body.
   ///   - boundary: The multipart boundary string.
+  /// - Returns: A `PortalResponse<Void>` containing status code, headers, and the adapted request.
   @available(macOS 12.0, iOS 15.0, *)
-  func send(request: PortalRequest, medias: [PortalMedia], boundary: String) async throws
+  @discardableResult
+  func send(request: PortalRequest, medias: [PortalMedia], boundary: String) async throws -> PortalResponse<Void>
 }

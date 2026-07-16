@@ -64,7 +64,7 @@ struct URLSessionTransportTests {
         stubResponse(200, data: body)
         let (transport, _) = makeStubTransport()
         let request = PortalRequest(method: .get, path: Path(url: "https://api.example.com/test", query: nil), scheme: nil)
-        let (data, code) = try await transport.execute(request)
+        let (data, code, _) = try await transport.execute(request)
         #expect(code == 200)
         #expect(data == body)
     }
@@ -120,7 +120,7 @@ struct URLSessionTransportTests {
             body: Body(data: Payload(name: "Alice"), encoding: .json),
             scheme: nil
         )
-        let (_, code) = try await transport.execute(request)
+        let (_, code, _) = try await transport.execute(request)
         #expect(code == 201)
         #expect(receivedContentType == "application/json")
     }
@@ -140,7 +140,7 @@ struct URLSessionTransportTests {
             body: Body(data: Payload(key: "val"), encoding: .urlEncoded),
             scheme: nil
         )
-        let (_, code) = try await transport.execute(request)
+        let (_, code, _) = try await transport.execute(request)
         #expect(code == 200)
         #expect(receivedContentType == "application/x-www-form-urlencoded")
     }
@@ -163,7 +163,7 @@ struct URLSessionTransportTests {
         stubResponse(404)
         let (transport, _) = makeStubTransport()
         let request = PortalRequest(method: .get, path: Path(url: "https://api.example.com/test", query: nil), scheme: nil)
-        let (_, code) = try await transport.execute(request)
+        let (_, code, _) = try await transport.execute(request)
         #expect(code == 404)
     }
 }

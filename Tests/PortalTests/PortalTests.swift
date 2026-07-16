@@ -14,38 +14,42 @@ func makePortal(transport: MockTransport, interceptor: PortalInterceptorProtocol
 struct PortalSendTests {
     @Test func success() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 1)), 200))
-        let response: Response = try await makePortal(transport: transport).send(
-            request: PortalRequest(method: .get, path: Path(url: "/items", query: nil))
+        transport.result = .success((encoded(Response(id: 1)), 200, []))
+        let response = try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .get, path: Path(url: "/items", query: nil)),
+            decoding: Response.self
         )
-        #expect(response.id == 1)
+        #expect(response.value.id == 1)
     }
 
     @Test func buildsFullURL() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 1)), 200))
-        let _: Response = try await makePortal(transport: transport).send(
-            request: PortalRequest(method: .get, path: Path(url: "/items", query: nil))
+        transport.result = .success((encoded(Response(id: 1)), 200, []))
+        _ = try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .get, path: Path(url: "/items", query: nil)),
+            decoding: Response.self
         )
         #expect(transport.lastRequest?.path.url.contains("api.example.com") == true)
     }
 
     @Test func decodingFailure() async throws {
         let transport = MockTransport()
-        transport.result = .success(("invalid json".data(using: .utf8)!, 200))
+        transport.result = .success(("invalid json".data(using: .utf8)!, 200, []))
         await #expect(throws: PortalError.self) {
-            let _: Response = try await makePortal(transport: transport).send(
-                request: PortalRequest(method: .get, path: Path(url: "/items", query: nil))
+            _ = try await makePortal(transport: transport).send(
+                request: PortalRequest(method: .get, path: Path(url: "/items", query: nil)),
+                decoding: Response.self
             )
         }
     }
 
     @Test func non2xxThrowsUnderlying() async throws {
         let transport = MockTransport()
-        transport.result = .success((Data(), 404))
+        transport.result = .success((Data(), 404, []))
         do {
-            let _: Response = try await makePortal(transport: transport).send(
-                request: PortalRequest(method: .get, path: Path(url: "/missing", query: nil))
+            _ = try await makePortal(transport: transport).send(
+                request: PortalRequest(method: .get, path: Path(url: "/missing", query: nil)),
+                decoding: Response.self
             )
             Issue.record("expected throw")
         } catch let error as PortalError {
@@ -59,67 +63,101 @@ struct PortalSendTests {
         struct NetError: Error {}
         transport.result = .failure(NetError())
         await #expect(throws: (any Error).self) {
-            let _: Response = try await makePortal(transport: transport).send(
-                request: PortalRequest(method: .get, path: Path(url: "/fail", query: nil))
+            _ = try await makePortal(transport: transport).send(
+                request: PortalRequest(method: .get, path: Path(url: "/fail", query: nil)),
+                decoding: Response.self
             )
         }
     }
 
     @Test func appliesHttpsScheme() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 99)), 200))
-        let _: Response = try await makePortal(transport: transport).send(
-            request: PortalRequest(method: .get, path: Path(url: "/secure", query: nil), scheme: .https)
+        transport.result = .success((encoded(Response(id: 99)), 200, []))
+        _ = try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .get, path: Path(url: "/secure", query: nil), scheme: .https),
+            decoding: Response.self
         )
         #expect(transport.lastRequest?.path.url.hasPrefix("https://") == true)
     }
 
     @Test func nilSchemeNoOverride() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 2)), 200))
-        let _: Response = try await makePortal(transport: transport).send(
-            request: PortalRequest(method: .get, path: Path(url: "/api", query: nil), scheme: nil)
+        transport.result = .success((encoded(Response(id: 2)), 200, []))
+        _ = try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .get, path: Path(url: "/api", query: nil), scheme: nil),
+            decoding: Response.self
         )
         #expect(transport.lastRequest != nil)
     }
 
     @Test func queryParamsForwarded() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 4)), 200))
-        let _: Response = try await makePortal(transport: transport).send(
-            request: PortalRequest(method: .get, path: Path(url: "/list", query: [URLQueryItem(name: "page", value: "2")]))
+        transport.result = .success((encoded(Response(id: 4)), 200, []))
+        _ = try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .get, path: Path(url: "/list", query: [URLQueryItem(name: "page", value: "2")])),
+            decoding: Response.self
         )
         #expect(transport.lastRequest?.path.query?.first?.name == "page")
     }
 
     @Test func applySchemeReplacesExistingScheme() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 3)), 200))
+        transport.result = .success((encoded(Response(id: 3)), 200, []))
         let portal = Portal(baseURL: "http://api.example.com", transport: transport)
-        let _: Response = try await portal.send(
-            request: PortalRequest(method: .get, path: Path(url: "/x", query: nil), scheme: .https)
+        _ = try await portal.send(
+            request: PortalRequest(method: .get, path: Path(url: "/x", query: nil), scheme: .https),
+            decoding: Response.self
         )
         #expect(transport.lastRequest?.path.url.hasPrefix("https://") == true)
     }
 
     @Test func urlWithoutSchemeGetsSchemeApplied() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 3)), 200))
+        transport.result = .success((encoded(Response(id: 3)), 200, []))
         let portal = Portal(baseURL: "api.example.com", transport: transport)
-        let _: Response = try await portal.send(
-            request: PortalRequest(method: .get, path: Path(url: "/path", query: nil), scheme: .https)
+        _ = try await portal.send(
+            request: PortalRequest(method: .get, path: Path(url: "/path", query: nil), scheme: .https),
+            decoding: Response.self
         )
         #expect(transport.lastRequest?.path.url.hasPrefix("https://") == true)
     }
 
     @Test func decodingWithExplicitType() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 42)), 200))
+        transport.result = .success((encoded(Response(id: 42)), 200, []))
         let response = try await makePortal(transport: transport).send(
             request: PortalRequest(method: .get, path: Path(url: "/items", query: nil)),
             decoding: Response.self
         )
-        #expect(response.id == 42)
+        #expect(response.value.id == 42)
+    }
+
+    @Test func responseContainsStatusCode() async throws {
+        let transport = MockTransport()
+        transport.result = .success((encoded(Response(id: 1)), 201, []))
+        let response = try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .post, path: Path(url: "/items", query: nil)),
+            decoding: Response.self
+        )
+        #expect(response.statusCode == 201)
+    }
+
+    @Test func responseContainsHeaders() async throws {
+        let transport = MockTransport()
+        transport.result = .success((encoded(Response(id: 1)), 200, [Header(key: "X-Request-ID", value: "abc")]))
+        let response = try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .get, path: Path(url: "/items", query: nil)),
+            decoding: Response.self
+        )
+        #expect(response.headers.first(where: { $0.key.rawValue == "X-Request-ID" })?.value.rawValue == "abc")
+    }
+
+    @Test func responseContainsRequest() async throws {
+        let transport = MockTransport()
+        transport.result = .success((encoded(Response(id: 1)), 200, []))
+        let request = PortalRequest(method: .get, path: Path(url: "/items", query: nil))
+        let response = try await makePortal(transport: transport).send(request: request, decoding: Response.self)
+        #expect(response.request.path.url.contains("/items"))
     }
 }
 
@@ -127,7 +165,7 @@ struct PortalSendTests {
 struct PortalInterceptorTests {
     @Test func adaptIsCalled() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 5)), 200))
+        transport.result = .success((encoded(Response(id: 5)), 200, []))
 
         final class HeaderInterceptor: PortalInterceptorProtocol {
             var adapted = false
@@ -138,8 +176,9 @@ struct PortalInterceptorTests {
         }
 
         let interceptor = HeaderInterceptor()
-        let _: Response = try await makePortal(transport: transport, interceptor: interceptor).send(
-            request: PortalRequest(method: .get, path: Path(url: "/me", query: nil))
+        _ = try await makePortal(transport: transport, interceptor: interceptor).send(
+            request: PortalRequest(method: .get, path: Path(url: "/me", query: nil)),
+            decoding: Response.self
         )
         #expect(interceptor.adapted)
         #expect(transport.lastRequest?.header?.first(where: { $0.key.rawValue == "X-Token" })?.value.rawValue == "abc")
@@ -147,18 +186,19 @@ struct PortalInterceptorTests {
 
     @Test func doNotRetry() async throws {
         let transport = MockTransport()
-        transport.result = .success((Data(), 401))
+        transport.result = .success((Data(), 401, []))
         final class NoRetryInterceptor: PortalInterceptorProtocol {}
         await #expect(throws: (any Error).self) {
-            let _: Response = try await makePortal(transport: transport, interceptor: NoRetryInterceptor()).send(
-                request: PortalRequest(method: .get, path: Path(url: "/auth", query: nil))
+            _ = try await makePortal(transport: transport, interceptor: NoRetryInterceptor()).send(
+                request: PortalRequest(method: .get, path: Path(url: "/auth", query: nil)),
+                decoding: Response.self
             )
         }
     }
 
     @Test func retryOnceSucceeds() async throws {
         let transport = MockTransport()
-        transport.result = .success((Data(), 401))
+        transport.result = .success((Data(), 401, []))
 
         final class RetryOnceInterceptor: PortalInterceptorProtocol {
             var retried = false
@@ -166,17 +206,18 @@ struct PortalInterceptorTests {
             let successData: Data
             init(transport: MockTransport, successData: Data) { self.transport = transport; self.successData = successData }
             func retry(_ request: PortalRequest, dueTo error: Error) async throws -> RetryResult {
-                if !retried { retried = true; transport.result = .success((successData, 200)); return .retry }
+                if !retried { retried = true; transport.result = .success((successData, 200, [])); return .retry }
                 return .doNotRetry
             }
         }
 
         let successData = encoded(Response(id: 42))
         let interceptor = RetryOnceInterceptor(transport: transport, successData: successData)
-        let response: Response = try await makePortal(transport: transport, interceptor: interceptor).send(
-            request: PortalRequest(method: .get, path: Path(url: "/retry", query: nil))
+        let response = try await makePortal(transport: transport, interceptor: interceptor).send(
+            request: PortalRequest(method: .get, path: Path(url: "/retry", query: nil)),
+            decoding: Response.self
         )
-        #expect(response.id == 42)
+        #expect(response.value.id == 42)
     }
 }
 
@@ -193,34 +234,37 @@ struct PortalLogLevelTests {
 
     @Test func noneLogLevelStillExecutes() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 1)), 200))
+        transport.result = .success((encoded(Response(id: 1)), 200, []))
         let portal = makePortal(transport: transport)
         portal.logLevel = .none
-        let response: Response = try await portal.send(
-            request: PortalRequest(method: .get, path: Path(url: "/ok", query: nil))
+        let response = try await portal.send(
+            request: PortalRequest(method: .get, path: Path(url: "/ok", query: nil)),
+            decoding: Response.self
         )
-        #expect(response.id == 1)
+        #expect(response.value.id == 1)
     }
 
     @Test func releaseLogLevelStillExecutes() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 2)), 200))
+        transport.result = .success((encoded(Response(id: 2)), 200, []))
         let portal = makePortal(transport: transport)
         portal.logLevel = .release
-        let response: Response = try await portal.send(
-            request: PortalRequest(method: .get, path: Path(url: "/ok", query: nil))
+        let response = try await portal.send(
+            request: PortalRequest(method: .get, path: Path(url: "/ok", query: nil)),
+            decoding: Response.self
         )
-        #expect(response.id == 2)
+        #expect(response.value.id == 2)
     }
 
     @Test func releaseLogLevelOnError() async throws {
         let transport = MockTransport()
-        transport.result = .success((Data(), 500))
+        transport.result = .success((Data(), 500, []))
         let portal = makePortal(transport: transport)
         portal.logLevel = .release
         await #expect(throws: (any Error).self) {
-            let _: Response = try await portal.send(
-                request: PortalRequest(method: .get, path: Path(url: "/err", query: nil))
+            _ = try await portal.send(
+                request: PortalRequest(method: .get, path: Path(url: "/err", query: nil)),
+                decoding: Response.self
             )
         }
     }
@@ -230,10 +274,10 @@ struct PortalLogLevelTests {
 struct PortalCancellationTests {
     @Test func sendThrowsWhenAlreadyCancelled() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 1)), 200))
+        transport.result = .success((encoded(Response(id: 1)), 200, []))
         let portal = makePortal(transport: transport)
-        let task = Task<Response, Error> {
-            try await portal.send(request: PortalRequest(method: .get, path: Path(url: "/items", query: nil)))
+        let task = Task<PortalResponse<Response>, Error> {
+            try await portal.send(request: PortalRequest(method: .get, path: Path(url: "/items", query: nil)), decoding: Response.self)
         }
         task.cancel()
         await #expect(throws: CancellationError.self) {
@@ -243,14 +287,15 @@ struct PortalCancellationTests {
 
     @Test func multipartSendThrowsWhenAlreadyCancelled() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 2)), 200))
+        transport.result = .success((encoded(Response(id: 2)), 200, []))
         let portal = makePortal(transport: transport)
         let media = PortalMedia(data: Data([0x01]), key: "f", filename: "f.jpg", mimeType: "image/jpeg")
-        let task = Task<Response, Error> {
+        let task = Task<PortalResponse<Response>, Error> {
             try await portal.send(
                 request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil)),
                 medias: [media],
-                boundary: "b"
+                boundary: "b",
+                decoding: Response.self
             )
         }
         task.cancel()
@@ -264,24 +309,26 @@ struct PortalCancellationTests {
 struct PortalMultipartTests {
     @Test func success() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 7)), 200))
+        transport.result = .success((encoded(Response(id: 7)), 200, []))
         let media = PortalMedia(data: Data([0x01]), key: "file", filename: "img.jpg", mimeType: "image/jpeg")
-        let response: Response = try await makePortal(transport: transport).send(
+        let response = try await makePortal(transport: transport).send(
             request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil)),
             medias: [media],
-            boundary: "boundary123"
+            boundary: "boundary123",
+            decoding: Response.self
         )
-        #expect(response.id == 7)
+        #expect(response.value.id == 7)
     }
 
     @Test func setsContentTypeHeader() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 8)), 200))
+        transport.result = .success((encoded(Response(id: 8)), 200, []))
         let media = PortalMedia(data: Data([0xFF]), key: "avatar", filename: "av.png", mimeType: "image/png")
-        let _: Response = try await makePortal(transport: transport).send(
+        _ = try await makePortal(transport: transport).send(
             request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil)),
             medias: [media],
-            boundary: "myboundary"
+            boundary: "myboundary",
+            decoding: Response.self
         )
         let contentType = transport.lastRequest?.header?.first(where: { $0.key == .contentType })?.value.rawValue
         #expect(contentType?.contains("multipart/form-data") == true)
@@ -290,46 +337,49 @@ struct PortalMultipartTests {
 
     @Test func withBodyParams() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 9)), 200))
+        transport.result = .success((encoded(Response(id: 9)), 200, []))
         struct Params: Encodable { let name: String }
         let media = PortalMedia(data: Data([0xAB]), key: "doc", filename: "doc.pdf", mimeType: "application/pdf")
-        let response: Response = try await makePortal(transport: transport).send(
+        let response = try await makePortal(transport: transport).send(
             request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil), body: Body(data: Params(name: "test"), encoding: .json)),
             medias: [media],
-            boundary: "b42"
+            boundary: "b42",
+            decoding: Response.self
         )
-        #expect(response.id == 9)
+        #expect(response.value.id == 9)
     }
 
     @Test func decodingFailure() async throws {
         let transport = MockTransport()
-        transport.result = .success(("bad".data(using: .utf8)!, 200))
+        transport.result = .success(("bad".data(using: .utf8)!, 200, []))
         let media = PortalMedia(data: Data([0x00]), key: "f", filename: "f.bin", mimeType: "application/octet-stream")
         await #expect(throws: PortalError.self) {
-            let _: Response = try await makePortal(transport: transport).send(
+            _ = try await makePortal(transport: transport).send(
                 request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil)),
                 medias: [media],
-                boundary: "b"
+                boundary: "b",
+                decoding: Response.self
             )
         }
     }
 
     @Test func non2xxThrows() async throws {
         let transport = MockTransport()
-        transport.result = .success((Data(), 500))
+        transport.result = .success((Data(), 500, []))
         let media = PortalMedia(data: Data([0x00]), key: "f", filename: "f.bin", mimeType: "application/octet-stream")
         await #expect(throws: (any Error).self) {
-            let _: Response = try await makePortal(transport: transport).send(
+            _ = try await makePortal(transport: transport).send(
                 request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil)),
                 medias: [media],
-                boundary: "b"
+                boundary: "b",
+                decoding: Response.self
             )
         }
     }
 
     @Test func interceptorAdapts() async throws {
         let transport = MockTransport()
-        transport.result = .success((encoded(Response(id: 10)), 200))
+        transport.result = .success((encoded(Response(id: 10)), 200, []))
         final class TokenInterceptor: PortalInterceptorProtocol {
             func adapt(_ request: PortalRequest) -> PortalRequest {
                 var r = request
@@ -340,12 +390,13 @@ struct PortalMultipartTests {
             }
         }
         let media = PortalMedia(data: Data([0x01]), key: "img", filename: "i.jpg", mimeType: "image/jpeg")
-        let response: Response = try await makePortal(transport: transport, interceptor: TokenInterceptor()).send(
+        let response = try await makePortal(transport: transport, interceptor: TokenInterceptor()).send(
             request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil)),
             medias: [media],
-            boundary: "b"
+            boundary: "b",
+            decoding: Response.self
         )
-        #expect(response.id == 10)
+        #expect(response.value.id == 10)
     }
 }
 
@@ -353,7 +404,7 @@ struct PortalMultipartTests {
 struct PortalEmptyResponseTests {
     @Test func success() async throws {
         let transport = MockTransport()
-        transport.result = .success((Data(), 204))
+        transport.result = .success((Data(), 204, []))
         try await makePortal(transport: transport).send(
             request: PortalRequest(method: .delete, path: Path(url: "/items/1", query: nil))
         )
@@ -361,7 +412,7 @@ struct PortalEmptyResponseTests {
 
     @Test func non2xxThrows() async throws {
         let transport = MockTransport()
-        transport.result = .success((Data(), 404))
+        transport.result = .success((Data(), 404, []))
         await #expect(throws: (any Error).self) {
             try await makePortal(transport: transport).send(
                 request: PortalRequest(method: .delete, path: Path(url: "/missing", query: nil))
@@ -371,7 +422,7 @@ struct PortalEmptyResponseTests {
 
     @Test func non2xxThrowsUnderlying() async throws {
         let transport = MockTransport()
-        transport.result = .success((Data(), 500))
+        transport.result = .success((Data(), 500, []))
         do {
             try await makePortal(transport: transport).send(
                 request: PortalRequest(method: .get, path: Path(url: "/fail", query: nil))
@@ -388,7 +439,7 @@ struct PortalEmptyResponseTests {
         var callCount = 0
         transport.resultProvider = {
             callCount += 1
-            return callCount == 1 ? .success((Data(), 401)) : .success((Data(), 204))
+            return callCount == 1 ? .success((Data(), 401, [])) : .success((Data(), 204, []))
         }
         final class RetryOnce: PortalInterceptorProtocol {
             var retried = false
@@ -403,13 +454,22 @@ struct PortalEmptyResponseTests {
         )
         #expect(callCount == 2)
     }
+
+    @Test func emptyResponseContainsStatusCode() async throws {
+        let transport = MockTransport()
+        transport.result = .success((Data(), 204, []))
+        let response = try await makePortal(transport: transport).send(
+            request: PortalRequest(method: .delete, path: Path(url: "/items/1", query: nil))
+        )
+        #expect(response.statusCode == 204)
+    }
 }
 
 @Suite("Portal.send(request:medias:boundary:) empty response")
 struct PortalEmptyMultipartResponseTests {
     @Test func success() async throws {
         let transport = MockTransport()
-        transport.result = .success((Data(), 200))
+        transport.result = .success((Data(), 200, []))
         let media = PortalMedia(data: Data([0x01]), key: "file", filename: "f.jpg", mimeType: "image/jpeg")
         try await makePortal(transport: transport).send(
             request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil)),
@@ -420,7 +480,7 @@ struct PortalEmptyMultipartResponseTests {
 
     @Test func non2xxThrows() async throws {
         let transport = MockTransport()
-        transport.result = .success((Data(), 422))
+        transport.result = .success((Data(), 422, []))
         let media = PortalMedia(data: Data([0x01]), key: "file", filename: "f.jpg", mimeType: "image/jpeg")
         await #expect(throws: (any Error).self) {
             try await makePortal(transport: transport).send(
@@ -433,7 +493,7 @@ struct PortalEmptyMultipartResponseTests {
 
     @Test func setsContentTypeHeader() async throws {
         let transport = MockTransport()
-        transport.result = .success((Data(), 201))
+        transport.result = .success((Data(), 201, []))
         let media = PortalMedia(data: Data([0xFF]), key: "img", filename: "img.png", mimeType: "image/png")
         try await makePortal(transport: transport).send(
             request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil)),
@@ -544,7 +604,7 @@ struct CacheHandlerTests {
         let cache = InMemoryCache()
         let handler = CacheHandler(cache: cache)
         let request = PortalRequest(method: .get, path: Path(url: "/fail", query: nil))
-        await handler.store(data: Data([0x01]), statusCode: 404, headers: [:], for: request)
+        await handler.store(data: Data([0x01]), statusCode: 404, headers: [], for: request)
         #expect(await cache.get(handler.cacheKey(for: request)) == nil)
     }
 
@@ -552,7 +612,7 @@ struct CacheHandlerTests {
         let cache = InMemoryCache()
         let handler = CacheHandler(cache: cache)
         let request = PortalRequest(method: .get, path: Path(url: "/items", query: nil))
-        await handler.store(data: Data([0x01]), statusCode: 200, headers: [:], for: request)
+        await handler.store(data: Data([0x01]), statusCode: 200, headers: [], for: request)
         #expect(await cache.get(handler.cacheKey(for: request)) != nil)
     }
 
@@ -560,7 +620,7 @@ struct CacheHandlerTests {
         let cache = InMemoryCache()
         let handler = CacheHandler(cache: cache)
         let request = PortalRequest(method: .get, path: Path(url: "/items", query: nil))
-        await handler.store(data: Data([0x01]), statusCode: 200, headers: ["Cache-Control": "no-store"], for: request)
+        await handler.store(data: Data([0x01]), statusCode: 200, headers: [Header(key: .cacheControl, value: .noStore)], for: request)
         #expect(await cache.get(handler.cacheKey(for: request)) == nil)
     }
 
@@ -568,7 +628,7 @@ struct CacheHandlerTests {
         let cache = InMemoryCache()
         let handler = CacheHandler(cache: cache)
         let request = PortalRequest(method: .get, path: Path(url: "/items", query: nil))
-        await handler.store(data: Data([0x01]), statusCode: 200, headers: ["Cache-Control": "max-age=300"], for: request)
+        await handler.store(data: Data([0x01]), statusCode: 200, headers: [Header(key: .cacheControl, value: "max-age=300")], for: request)
         let entry = await cache.get(handler.cacheKey(for: request))
         #expect(entry?.expiresAt != nil)
         #expect(entry?.isExpired == false)
@@ -578,7 +638,7 @@ struct CacheHandlerTests {
         let cache = InMemoryCache()
         let handler = CacheHandler(cache: cache)
         let request = PortalRequest(method: .get, path: Path(url: "/items", query: nil))
-        await handler.store(data: Data([0x01]), statusCode: 200, headers: ["ETag": "\"abc123\""], for: request)
+        await handler.store(data: Data([0x01]), statusCode: 200, headers: [Header(key: .eTag, value: "\"abc123\"")], for: request)
         let entry = await cache.get(handler.cacheKey(for: request))
         #expect(entry?.etag == "\"abc123\"")
     }

@@ -30,19 +30,19 @@ public struct URLSessionTransport: HTTPTransport {
     self.cacheHandler = cache.map(CacheHandler.init)
   }
   
-  public func execute(_ request: PortalRequest) async throws -> (Data, Int) {
+  public func execute(_ request: PortalRequest) async throws -> (Data, Int, [Header]) {
     try Task.checkCancellation()
 
     if let handler = cacheHandler {
       return try await executeWithCache(request, handler: handler)
     }
 
-    return try await performRequest(request)
+    return try await performRequestWithHeaders(request)
   }
-  
-  private func executeWithCache(_ request: PortalRequest, handler: CacheHandler) async throws -> (Data, Int) {
+
+  private func executeWithCache(_ request: PortalRequest, handler: CacheHandler) async throws -> (Data, Int, [Header]) {
     if let cached = await handler.cachedEntry(for: request) {
-      if !cached.isExpired { return (cached.data, cached.statusCode) }
+      if !cached.isExpired { return (cached.data, cached.statusCode, []) }
       // stale + has ETag: conditional request
       if let etag = cached.etag {
         var conditional = request
@@ -50,24 +50,19 @@ public struct URLSessionTransport: HTTPTransport {
         let (data, statusCode, headers) = try await performRequestWithHeaders(conditional)
         if statusCode == 304 {
           await handler.refresh(cached: cached, for: request, responseHeaders: headers)
-          return (cached.data, cached.statusCode)
+          return (cached.data, cached.statusCode, [])
         }
         await handler.store(data: data, statusCode: statusCode, headers: headers, for: request)
-        return (data, statusCode)
+        return (data, statusCode, headers)
       }
     }
 
     let (data, statusCode, headers) = try await performRequestWithHeaders(request)
     await handler.store(data: data, statusCode: statusCode, headers: headers, for: request)
-    return (data, statusCode)
+    return (data, statusCode, headers)
   }
 
-  private func performRequest(_ request: PortalRequest) async throws -> (Data, Int) {
-    let (data, statusCode, _) = try await performRequestWithHeaders(request)
-    return (data, statusCode)
-  }
-
-  private func performRequestWithHeaders(_ request: PortalRequest) async throws -> (Data, Int, [String: String]) {
+  private func performRequestWithHeaders(_ request: PortalRequest) async throws -> (Data, Int, [Header]) {
     guard let url = buildURL(from: request) else { throw PortalError.invalidUrl }
     var urlRequest = URLRequest(url: url)
     urlRequest.httpMethod = request.method.rawValue
@@ -90,8 +85,9 @@ public struct URLSessionTransport: HTTPTransport {
     }
     let (data, response) = try await session.data(for: urlRequest)
     guard let httpResponse = response as? HTTPURLResponse else { throw PortalError.invalidHTTPResponse }
-    let headers = httpResponse.allHeaderFields.reduce(into: [String: String]()) { result, pair in
-      if let key = pair.key as? String, let value = pair.value as? String { result[key] = value }
+    let headers: [Header] = httpResponse.allHeaderFields.compactMap { pair in
+      guard let key = pair.key as? String, let value = pair.value as? String else { return nil }
+      return Header(key: HeaderKey(stringLiteral: key), value: HeaderValue(stringLiteral: value))
     }
     return (data, httpResponse.statusCode, headers)
   }

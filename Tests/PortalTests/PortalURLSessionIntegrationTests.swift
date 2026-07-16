@@ -38,23 +38,25 @@ struct PortalURLSessionIntegrationTests {
     @Test func multipartSend() async throws {
         let portal = makePortal(statusCode: 200, responseData: try! JSONEncoder().encode(Response(id: 77)))
         let media = PortalMedia(data: Data([0x01, 0x02]), key: "file", filename: "img.jpg", mimeType: "image/jpeg")
-        let response: Response = try await portal.send(
+        let response = try await portal.send(
             request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil)),
             medias: [media],
-            boundary: "boundary123"
+            boundary: "boundary123",
+            decoding: Response.self
         )
-        #expect(response.id == 77)
+        #expect(response.value.id == 77)
     }
 
     @Test func multipartWithBodyParams() async throws {
         let portal = makePortal(statusCode: 200, responseData: try! JSONEncoder().encode(Response(id: 88)))
         struct Params: Encodable { let name: String }
         let media = PortalMedia(data: Data([0xFF]), key: "doc", filename: "doc.pdf", mimeType: "application/pdf")
-        let response: Response = try await portal.send(
+        let response = try await portal.send(
             request: PortalRequest(method: .post, path: Path(url: "/upload", query: nil), body: Body(data: Params(name: "test"), encoding: .json)),
             medias: [media],
-            boundary: "b42"
+            boundary: "b42",
+            decoding: Response.self
         )
-        #expect(response.id == 88)
+        #expect(response.value.id == 88)
     }
 }

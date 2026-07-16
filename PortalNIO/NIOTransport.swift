@@ -29,11 +29,11 @@ public struct NIOTransport: HTTPTransport {
     self.cacheHandler = cache.map(CacheHandler.init)
   }
 
-  public func execute(_ request: PortalRequest) async throws -> (Data, Int) {
+  public func execute(_ request: PortalRequest) async throws -> (Data, Int, [Header]) {
     if let handler = cacheHandler {
       return try await executeWithCache(request, handler: handler)
     }
-    return try await performRequest(request)
+    return try await performRequestWithHeaders(request)
   }
 }
 
@@ -41,32 +41,27 @@ public struct NIOTransport: HTTPTransport {
 
 @available(macOS 10.15, iOS 13.0, *)
 private extension NIOTransport {
-  func executeWithCache(_ request: PortalRequest, handler: CacheHandler) async throws -> (Data, Int) {
+  func executeWithCache(_ request: PortalRequest, handler: CacheHandler) async throws -> (Data, Int, [Header]) {
     if let cached = await handler.cachedEntry(for: request) {
-      if !cached.isExpired { return (cached.data, cached.statusCode) }
+      if !cached.isExpired { return (cached.data, cached.statusCode, []) }
       if let etag = cached.etag {
         var conditional = request
         conditional.header = (conditional.header ?? []) + [Header(key: .ifNoneMatch, value: HeaderValue(stringLiteral: etag))]
         let (data, statusCode, headers) = try await performRequestWithHeaders(conditional)
         if statusCode == 304 {
           await handler.refresh(cached: cached, for: request, responseHeaders: headers)
-          return (cached.data, cached.statusCode)
+          return (cached.data, cached.statusCode, [])
         }
         await handler.store(data: data, statusCode: statusCode, headers: headers, for: request)
-        return (data, statusCode)
+        return (data, statusCode, headers)
       }
     }
     let (data, statusCode, headers) = try await performRequestWithHeaders(request)
     await handler.store(data: data, statusCode: statusCode, headers: headers, for: request)
-    return (data, statusCode)
+    return (data, statusCode, headers)
   }
 
-  func performRequest(_ request: PortalRequest) async throws -> (Data, Int) {
-    let (data, statusCode, _) = try await performRequestWithHeaders(request)
-    return (data, statusCode)
-  }
-
-  func performRequestWithHeaders(_ request: PortalRequest) async throws -> (Data, Int, [String: String]) {
+  func performRequestWithHeaders(_ request: PortalRequest) async throws -> (Data, Int, [Header]) {
     var httpRequest = HTTPClientRequest(url: buildURL(from: request))
     httpRequest.method = HTTPMethod(rawValue: request.method.rawValue)
     if let timeout = request.timeout {
@@ -103,7 +98,7 @@ private extension NIOTransport {
     try Task.checkCancellation()
     let buffer = try await response.body.collect(upTo: 10 * 1024 * 1024)
     let data = Data(buffer: buffer)
-    let headers = Dictionary(response.headers.map { ($0.name, $0.value) }, uniquingKeysWith: { _, last in last })
+    let headers: [Header] = response.headers.map { Header(key: HeaderKey(stringLiteral: $0.name), value: HeaderValue(stringLiteral: $0.value)) }
     return (data, Int(response.status.code), headers)
   }
 

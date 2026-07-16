@@ -35,25 +35,25 @@ public struct CacheHandler {
   }
 
   /// Stores the response if the policy and status code allow it.
-  public func store(data: Data, statusCode: Int, headers: [String: String], for request: PortalRequest) async {
+  public func store(data: Data, statusCode: Int, headers: [Header], for request: PortalRequest) async {
     let policy = request.cachePolicy ?? .useCache
     guard policy != .reloadIgnoring, (200...299).contains(statusCode) else { return }
     let maxAge = parseMaxAge(from: headers) ?? 60
     guard maxAge > 0 else { return }
     let key = cacheKey(for: request)
     let expiresAt = Date().addingTimeInterval(TimeInterval(maxAge))
-    let etag = headers["etag"] ?? headers["ETag"]
+    let etag = headers.first(where: { $0.key.rawValue.lowercased() == "etag" })?.value.rawValue
     let entry = CachedResponse(data: data, statusCode: statusCode, expiresAt: expiresAt, etag: etag)
     await cache.set(key, response: entry)
   }
 
   /// Refreshes the TTL of an existing entry (called after a 304 response).
-  public func refresh(cached: CachedResponse, for request: PortalRequest, responseHeaders: [String: String]) async {
+  public func refresh(cached: CachedResponse, for request: PortalRequest, responseHeaders: [Header]) async {
     await store(data: cached.data, statusCode: cached.statusCode, headers: responseHeaders, for: request)
   }
 
-  private func parseMaxAge(from headers: [String: String]) -> Int? {
-    let value = headers["cache-control"] ?? headers["Cache-Control"] ?? ""
+  private func parseMaxAge(from headers: [Header]) -> Int? {
+    let value = headers.first(where: { $0.key.rawValue.lowercased() == "cache-control" })?.value.rawValue ?? ""
     for directive in value.split(separator: ",").map({ $0.trimmingCharacters(in: .whitespaces) }) {
       let lower = directive.lowercased()
       if lower.hasPrefix("no-store") || lower.hasPrefix("no-cache") { return 0 }
