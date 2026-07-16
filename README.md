@@ -19,12 +19,16 @@
 
 ---
 
-<p align="center">
-  <img src="assets/screenshot-ios.png" alt="Portal running on iOS" width="48%"/>
-  &nbsp;
-  <img src="assets/screenshot-android.png" alt="Portal running on Android" width="48%"/>
-</p>
-<p align="center"><em>Same Swift networking code running on iOS (left) and Android (right)</em></p>
+<table align="center" border="0" cellpadding="8">
+  <tr>
+    <td align="center"><img src="assets/screenshot-ios.png" alt="Portal on iOS" width="620"/></td>
+    <td align="center"><img src="assets/screenshot-android.png" alt="Portal on Android" width="620"/></td>
+  </tr>
+  <tr>
+    <td align="center"><em>iOS</em></td>
+    <td align="center"><em>Android</em></td>
+  </tr>
+</table>
 
 ---
 
